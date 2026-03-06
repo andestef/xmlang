@@ -4,7 +4,7 @@ class xmlang:
     class types:
         class funct:
             typeName = "funct"
-            def __init__(self,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=False):
+            def __init__(self,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=True):
                 self.takesChildren = takesChildren
                 self.children = children
                 self.reqargs = reqargs
@@ -19,10 +19,10 @@ class xmlang:
                 unusedReqs = self.reqargs
                 for i,v in child.attrib.items():
                     if i in self.reqargs:
-                        caller.varset(i,v)
+                        caller.varset(i,caller._textProcess(v))
                         unusedReqs.remove(i)
                     elif i in self.optArgs:
-                        caller.varset(i,v)
+                        caller.varset(i,caller._textProcess(v))
                         usedOpts.append(i)
                     else:
                         caller.error("CallError",f"Call to {child.tag} has illegal argument {i}")
@@ -30,7 +30,7 @@ class xmlang:
                     if not i in usedOpts:
                         caller.varset(i,v)
                 if unusedReqs != []:
-                    self.error("CallError",f"Call to {child.tag} missing required argument {unusedReqs[0]}")
+                    caller.error("CallError",f"Call to {child.tag} missing required argument {unusedReqs[0]}")
                 caller.run(self.children)
                 caller._autoglob = oag
                 caller._langcall = odb
@@ -44,12 +44,21 @@ class xmlang:
                 self.value = value
             def toString(self):
                 return self.value
+        class null:
+            typeName = "null"
+            def onCall(self,caller, child):
+                print("null")
+            def __init__(self):
+                pass
+            def toString(self):
+                return "null"
     def __init__(self,langcall=False):
         self._globs = {}
         self._langcall = langcall
         self._autoglob = True
         self._locs = {}
         self._consts = []
+        self._retv = self.types.null()
         self._buildBuiltins()
     def error(self,typ,reason="",fatal=True):
         print(f"XMLANG Error {typ}{' (fatal)' if fatal else ''}: {reason}.")
@@ -91,7 +100,11 @@ class xmlang:
             else:
                 self.error("FunctError",f"Unknown tag: {child.tag}")
     def _textProcess(self,text):
-        v = re.match("\{\}")
+        v = re.match(r"\{([^\}]*)\}",text)
+        while v != None:
+            text = text.replace(v[0],self.varget(v[1]).toString())
+            v = re.match(r"\{([^\}]*)\}",text)
+        return self.types.string(text)
     def _buildBuiltins(self):
         code = "<funct><langcall command='print'>{text}</langcall></funct>"
         child = ET.fromstring(code)
@@ -106,7 +119,7 @@ class xmlang:
                 if i == v:
                     reqArgs.append(i)
                 else:
-                    optArgs[i] = v
+                    optArgs[i] = self._textProcess(v)
         if 'kwargs' in list(child.attrib.keys()) and optArgs == {}:
             optArgs = None
         f = self.types.funct(child.iter(),reqArgs,optArgs,'takesChildren' in list(child.attrib.keys()))
@@ -115,7 +128,7 @@ class xmlang:
         if not self._langcall:
             self.error("LangCallError","Current funct does not have langcall permissions")
         if child.attrib['command'] == 'print':
-            print(child.text)
+            print(self._textProcess(child.attrib['text']))
     def addTag(self,tagname,data):
         self._tags[tagname] = data
-    _tags = {'funct':{"f":_tag_funct,'reqattrib':["name"],'optattrib':None,'takesChildren':True},'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':[],'takesChildren':True}} #Optattrib=None is equiv to **kwargs
+    _tags = {'funct':{"f":_tag_funct,'reqattrib':["name"],'optattrib':None,'takesChildren':True},'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True}} #Optattrib=None is equiv to **kwargs
