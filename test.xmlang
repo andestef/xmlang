@@ -1,6 +1,3 @@
 <xmlang version='1.0.0'>
-<funct name='print' text='text'>
-<langcall command='print' text='{text}'> </langcall>
-</funct>
-<print text='a'/>
+<print text='HI'/>
 </xmlang>
