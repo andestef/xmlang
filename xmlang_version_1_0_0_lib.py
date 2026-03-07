@@ -4,7 +4,7 @@ class xmlang:
     class types:
         class funct:
             typeName = "funct"
-            def __init__(self,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=True):
+            def __init__(self,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=False):
                 self.takesChildren = takesChildren
                 self.children = children
                 self.reqargs = reqargs
@@ -100,16 +100,20 @@ class xmlang:
             else:
                 self.error("FunctError",f"Unknown tag: {child.tag}")
     def _textProcess(self,text):
-        v = re.match(r"\{([^\}]*)\}",text)
-        while v != None:
-            text = text.replace(v[0],self.varget(v[1]).toString())
+        m = re.match(r"^[ \n\t]*\{var:[ \n\t]*([A-Za-z_\$]+[A-Za-z0-9_\$]*)[ \n\t]*\}[ \n\t]*$",text)
+        if m:
+            return self.varget(m[1])
+        else:
             v = re.match(r"\{([^\}]*)\}",text)
-        return self.types.string(text)
+            while v != None:
+                text = text.replace(v[0],self.varget(v[1]).toString())
+                v = re.match(r"\{([^\}]*)\}",text)
+            return self.types.string(text)
     def _buildBuiltins(self):
-        code = "<funct><langcall command='print'>{text}</langcall></funct>"
+        code = "<funct><langcall command='print' text='{var: text}'> </langcall></funct>"
         child = ET.fromstring(code)
-        f = self.types.funct(list(list(child.iter())[0].iter())[0],[],{},False,True)
-        self.varset("printhi",f)
+        f = self.types.funct(list(list(child.iter())[0].iter())[0],['text'],{},False,True)
+        self.varset("print",f)
     def _tag_funct(self,child):
         reqArgs = []
         optArgs = {}
@@ -128,7 +132,7 @@ class xmlang:
         if not self._langcall:
             self.error("LangCallError","Current funct does not have langcall permissions")
         if child.attrib['command'] == 'print':
-            print(self._textProcess(child.attrib['text']))
+            print(self._textProcess(child.attrib['text']).toString())
     def addTag(self,tagname,data):
         self._tags[tagname] = data
     _tags = {'funct':{"f":_tag_funct,'reqattrib':["name"],'optattrib':None,'takesChildren':True},'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True}} #Optattrib=None is equiv to **kwargs
