@@ -1,9 +1,9 @@
 import xml.etree.ElementTree as ET
 from importlib import import_module
-# uncomment to use command line mode and add comment next line
-filename = 'test.xmlang'
-'''from sys import argv
-filename = argv[1]'''
+#filename = 'test.xmlang'
+# comment to 'If you dont want to...' if you dont want use command line mode and uncomment previous line
+from sys import argv
+filename = argv[1]
 # If you don't want to use lxml comment from here to the next comment, then uncomment that line
 from lxml import etree
 parser = etree.XMLParser(recover=True)
