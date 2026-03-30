@@ -1,12 +1,16 @@
 import xml.etree.ElementTree as ET
 from importlib import import_module
+# uncomment to use command line mode and add comment next line
+filename = 'test.xmlang'
+'''from sys import argv
+filename = argv[1]'''
 # If you don't want to use lxml comment from here to the next comment, then uncomment that line
 from lxml import etree
 parser = etree.XMLParser(recover=True)
-s = open('test.xmlang').read()
+s = open(filename).read()
 tree = etree.fromstring(s, parser)
 root = ET.fromstring(etree.tostring(tree).decode('utf-8'))
-#root = ET.fromstring(open('test.xmlang').read())
+#root = ET.fromstring(open(filename).read())
 if root.tag != "xmlang":
     print("XMLANG Error: Missing <xmlang> opening tag.")
 if not "version" in root.attrib:
