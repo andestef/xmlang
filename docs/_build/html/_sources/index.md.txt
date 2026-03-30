@@ -1,5 +1,6 @@
-# Welcome to Brainf+'s Documentation
-```{toctree}
-installation/index.md
-usage/index.md
-```
+# XMLANG
+*Backend language using XML*
+## Installation
+`git clone https://github.com/andestef/xmlang.git`
+## Usage
+`python xmlang.py {file}`
