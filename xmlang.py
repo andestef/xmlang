@@ -1,12 +1,12 @@
 import xml.etree.ElementTree as ET
+from importlib import import_module
+# If you don't want to use lxml comment from here to the next comment, then uncomment that line
 from lxml import etree
-import re
 parser = etree.XMLParser(recover=True)
 s = open('test.xmlang').read()
-root = etree.fromstring(s, parser)
-from importlib import import_module
-tree = ET.fromstring(etree.tostring(root).decode('utf-8'))
-root = list(tree.iter())[0]
+tree = etree.fromstring(s, parser)
+root = ET.fromstring(etree.tostring(tree).decode('utf-8'))
+#root = ET.fromstring(open('test.xmlang').read())
 if root.tag != "xmlang":
     print("XMLANG Error: Missing <xmlang> opening tag.")
 if not "version" in root.attrib:

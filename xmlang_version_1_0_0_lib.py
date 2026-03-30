@@ -1,27 +1,46 @@
 import xml.etree.ElementTree as ET
 import re
+from copy import deepcopy
 class xmlang:
     class types:
         class funct:
             typeName = "funct"
-            def __init__(self,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=False):
+            def __init__(self,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=False,const=False):
                 self.takesChildren = takesChildren
                 self.children = children
                 self.reqargs = reqargs
                 self.optargs = optargs
                 self.allowlangcall = allowlangcall
-            def onCall(self,caller, child):
+                self.const = const
+            def make(caller, child):
+                reqArgs = []
+                optArgs = {}
+                fargs = ['name',"takesChildren", "kwargs"]
+                for i,v in child.attrib.items():
+                    if not i in fargs:
+                        if i == v:
+                            reqArgs.append(i)
+                        else:
+                            optArgs[i] = caller._textProcess(v)
+                if 'kwargs' in list(child.attrib.keys()) and optArgs == {}:
+                    optArgs = None
+                cl = []
+                for i in child:
+                    cl.append(i)
+                f = caller.types.funct(cl,reqArgs,optArgs,'takesChildren' in list(child.attrib.keys()),False,'const' in list(child.attrib.keys()))
+                caller.varset(child.attrib['name'],f)
+            def onCall(self, caller, child):
                 oag = caller._autoglob
                 caller._autoglob = False
                 odb = caller._langcall
                 caller._langcall = self.allowlangcall
                 usedOpts = []
-                unusedReqs = self.reqargs
+                unusedReqs = deepcopy(self.reqargs)
                 for i,v in child.attrib.items():
                     if i in self.reqargs:
                         caller.varset(i,caller._textProcess(v))
                         unusedReqs.remove(i)
-                    elif i in self.optArgs:
+                    elif i in self.optargs:
                         caller.varset(i,caller._textProcess(v))
                         usedOpts.append(i)
                     else:
@@ -40,45 +59,123 @@ class xmlang:
             typeName = "string"
             def onCall(self,caller, child):
                 print(self.value)
-            def __init__(self,value):
+            def make(caller, child):
+                f = caller.types.string(child.text,'const' in list(child.attrib.keys()))
+                caller.varset(child.attrib['name'],f)
+            def __init__(self,value,const=False):
                 self.value = value
+                self.const = const
             def toString(self):
                 return self.value
         class null:
             typeName = "null"
             def onCall(self,caller, child):
                 print("null")
-            def __init__(self):
-                pass
+            def __init__(self,const=False):
+                self.const = const
+            def make(caller, child):
+                f = caller.types.null('const' in list(child.attrib.keys()))
+                caller.varset(child.attrib['name'],f)
             def toString(self):
                 return "null"
+        class classType:
+            typeName = "class"
+            def onCall(self,caller, child):
+                print(f"Class {self.name} with children: {','.join([i.name for i in self.children])}.")
+            def __init__(self,name,const,cvars):
+                self.const = const
+                self.name = name
+                self.vars = cvars
+            def make(caller, child):
+                caller.setClass(child.attrib['name'],'const' in list(child.attrib.keys()))
+                ags = caller.autoGlob(False)
+                locs = caller.locsState()
+                cl = []
+                for i in child:
+                    cl.append(i)
+                caller.run(cl)
+                var = caller.endClass()
+                caller.autoGlob(ags)
+                caller.locsState(locs)
+                caller.varset(child.attrib['name'],var)
+            def toString(self):
+                return "null"
+        types = {"funct":funct,"string":string,"null":null,"class":classType}
     def __init__(self,langcall=False):
         self._globs = {}
         self._langcall = langcall
         self._autoglob = True
         self._locs = {}
+        self._class = [self.types.null()]
+        self._className = ""
         self._consts = []
+        self._aSpec = 'public'
         self._retv = self.types.null()
         self._buildBuiltins()
     def error(self,typ,reason="",fatal=True):
         print(f"XMLANG Error {typ}{' (fatal)' if fatal else ''}: {reason}.")
         if fatal:
             quit(1)
+    def autoGlob(self,state):
+        a = self._autoglob
+        self._autoglob = state
+        return a
+    def setClass(self,name,const):
+        if self._className == '':
+            self._className = name
+        else:
+            self._className += '.'+name
+        self._class.insert(0,self.types.classType(self._className,const,{}))
+    def endClass(self):
+        v = deepcopy(self._class[0])
+        del self._class[0]
+        cn = self._className[::-1].split('.')
+        del cn[0]
+        self._className = '.'.join(cn[::-1])
+        return v
+    def locsState(self,sv=None):
+        if sv == None:
+            v = deepcopy(self._locs)
+            self._locs = {}
+            return v
+        else:
+            self._locs = sv
     def varset(self,name,data,glob=False):
         if name in self._consts:
             self.error("DefineError",f"Variable {name} is constant")
+        if self._class[0].typeName != "null":
+            self._class[0].vars[name] = data
         self._locs[name] = data
         if self._autoglob or glob:
             self._globs[name] = data
     def varget(self,name):
-        if name in self._locs:
-            return self._locs[name]
-        elif name in self._globs:
-            return self._globs[name]
-        else:
-            self.error("DefineError",f"Name {name} is not defined")
+        class vl:
+            vars = {}
+        for i,v in self._globs.items():
+            vl.vars[i] = v
+        for i,v in self._locs.items():
+            vl.vars[i] = v
+        for i in name.split('.'):
+            if i in vl.vars:
+                vl = vl.vars[i]
+            else:
+                self.error("DefineError",f"Name {i} is not defined in {name}")
+        return vl
     def varexists(self,name):
-        return name in self._locs or name in self._globs
+        e = True
+        class vl:
+            vars = {}
+        for i,v in self._globs.items():
+            vl.vars[i] = v
+        for i,v in self._locs.items():
+            vl.vars[i] = v
+        for i in name.split('.'):
+            if i in vl.vars:
+                vl = vl.vars[i]
+            else:
+                e = False
+                break
+        return e
     def run(self,tree):
         for child in tree:
             if child.tag in self._tags:
@@ -95,12 +192,14 @@ class xmlang:
                 if self._tags[child.tag]['takesChildren'] and child.text == None and len(child) == 0:
                     self.error("CallError",f"Call to {child.tag} missing child value")
                 self._tags[child.tag]['f'](self,child)
+            elif child.tag in list(self.types.types.keys()):
+                self.types.types[child.tag].make(self,child)
             elif self.varexists(child.tag):
                 self.varget(child.tag).onCall(self,child)
             else:
                 self.error("FunctError",f"Unknown tag: {child.tag}")
     def _textProcess(self,text):
-        m = re.match(r"^[ \n\t]*\{var:[ \n\t]*([A-Za-z_\$]+[A-Za-z0-9_\$]*)[ \n\t]*\}[ \n\t]*$",text)
+        m = re.match(r"^[ \n\t]*\{var:[ \n\t]*([A-Za-z_\$]+[A-Za-z0-9_\.\$]*)[ \n\t]*\}[ \n\t]*$",text)
         if m:
             return self.varget(m[1])
         else:
@@ -112,27 +211,27 @@ class xmlang:
     def _buildBuiltins(self):
         code = "<funct><langcall command='print' text='{var: text}'> </langcall></funct>"
         child = ET.fromstring(code)
-        f = self.types.funct(list(list(child.iter())[0].iter())[0],['text'],{},False,True)
+        cl = []
+        for i in child:
+            cl.append(i)
+        f = self.types.funct(cl,['text'],{},False,True)
         self.varset("print",f)
-    def _tag_funct(self,child):
-        reqArgs = []
-        optArgs = {}
-        fargs = ['name',"takesChildren", "kwargs"]
-        for i,v in child.attrib.items():
-            if not i in fargs:
-                if i == v:
-                    reqArgs.append(i)
-                else:
-                    optArgs[i] = self._textProcess(v)
-        if 'kwargs' in list(child.attrib.keys()) and optArgs == {}:
-            optArgs = None
-        f = self.types.funct(child.iter(),reqArgs,optArgs,'takesChildren' in list(child.attrib.keys()))
-        self.varset(child.attrib['name'],f)
     def _tag_langcall(self,child):
         if not self._langcall:
             self.error("LangCallError","Current funct does not have langcall permissions")
-        if child.attrib['command'] == 'print':
+        elif child.attrib['command'] == 'print':
             print(self._textProcess(child.attrib['text']).toString())
+        elif child.attrib['command'] == 'rawvarprint':
+            print(vars(self.varget(child.attrib['name'])))
+        elif child.attrib['command'] == 'printvars':
+            print("Locs: "+str(self._locs))
+            print("Globs: "+str(self._globs))
     def addTag(self,tagname,data):
         self._tags[tagname] = data
-    _tags = {'funct':{"f":_tag_funct,'reqattrib':["name"],'optattrib':None,'takesChildren':True},'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True}} #Optattrib=None is equiv to **kwargs
+    def _tag_public(self,child):
+        self._aSpec = 'public'
+        cl = []
+        for i in child:
+            cl.append(i)
+        self.run(cl)
+    _tags = {'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True},'public':{"f":_tag_public,"reqattrib":[],"optattrib":[],'takesChildren':True}} #Optattrib=None is equiv to **kwargs
