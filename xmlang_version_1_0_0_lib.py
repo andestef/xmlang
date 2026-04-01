@@ -60,7 +60,7 @@ class xmlang:
             def onCall(self,caller, child):
                 print(self.value)
             def make(caller, child):
-                f = caller.types.string(child.text,'const' in list(child.attrib.keys()))
+                f = caller.types.string(caller._textProcess(child.text).toString(),'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['name'],f)
             def __init__(self,value,const=False):
                 self.value = value
@@ -81,13 +81,34 @@ class xmlang:
         class classType:
             typeName = "class"
             def onCall(self,caller, child):
-                print(f"Class {self.name} with children: {','.join([i.name for i in self.children])}.")
-            def __init__(self,name,const,cvars):
+                if self.makeType == 'static':
+                    n = deepcopy(child.attrib['name'])
+                    del child.attrib['name']
+                    ags = caller.autoGlob(False)
+                    caller.varset('this',self)
+                    if not self.name in self.vars:
+                        caller.error("ClassError",f"Class {self.name} missing self named constructor")
+                    self.vars[self.name].onCall(caller,child)
+                    var = caller.varget('this')
+                    caller.autoGlob(ags)
+                    caller.varset(n,var)
+                else:
+                    n = deepcopy(child.attrib['name'])
+                    del child.attrib['name']
+                    ags = caller.autoGlob(False)
+                    caller.varset('this',caller.types.classType(n,self.const,deepcopy(self.vars),'static'))
+                    self.vars[self.name].onCall(caller,child)
+                    var = caller.varget('this')
+                    caller.autoGlob(ags)
+                    caller.varset(n,var)
+            def __init__(self,name,const,cvars,makeType):
                 self.const = const
                 self.name = name
                 self.vars = cvars
+                self.makeType = makeType
             def make(caller, child):
-                caller.setClass(child.attrib['name'],'const' in list(child.attrib.keys()))
+                t = 'static' if 'static' in child.attrib else 'instance'
+                caller.setClass(child.attrib['name'],'const' in list(child.attrib.keys()),t)
                 ags = caller.autoGlob(False)
                 locs = caller.locsState()
                 cl = []
@@ -97,9 +118,11 @@ class xmlang:
                 var = caller.endClass()
                 caller.autoGlob(ags)
                 caller.locsState(locs)
+                if t == 'instance' and not child.attrib['name'] in list(var.vars.keys()):
+                    caller.error("ClassError",f"Class {child.attrib['name']} missing self named constructor")
                 caller.varset(child.attrib['name'],var)
             def toString(self):
-                return "null"
+                return f"Class {self.name} with children: {','.join([i.name for i in self.children])}."
         types = {"funct":funct,"string":string,"null":null,"class":classType}
     def __init__(self,langcall=False):
         self._globs = {}
@@ -120,12 +143,12 @@ class xmlang:
         a = self._autoglob
         self._autoglob = state
         return a
-    def setClass(self,name,const):
+    def setClass(self,name,const,maketype,vars={}):
         if self._className == '':
             self._className = name
         else:
             self._className += '.'+name
-        self._class.insert(0,self.types.classType(self._className,const,{}))
+        self._class.insert(0,self.types.classType(self._className,const,vars,maketype))
     def endClass(self):
         v = deepcopy(self._class[0])
         del self._class[0]
@@ -145,11 +168,36 @@ class xmlang:
             self.error("DefineError",f"Variable {name} is constant")
         if self._class[0].typeName != "null":
             self._class[0].vars[name] = data
-        self._locs[name] = data
+        class vl:
+            typeName = 'null'
+            vars = self._locs
+        s = name.split('.')
+        for v in range(len(s)-1):
+            i = s[v]
+            if i in vl.vars:
+                if vl.typeName == 'class' and vl.makeType == 'instance':
+                    self.error("ClassError",f"Can not set value of instance class {vl.name} in {name}")
+                vl = vl.vars[i]
+            else:
+                self.error("DefineError",f"Name {i} is not defined in {name}")
+        vl.vars[s[-1]] = data
         if self._autoglob or glob:
-            self._globs[name] = data
+            class vl:
+                typeName = 'null'
+                vars = self._globs
+            s = name.split('.')
+            for v in range(len(s)-1):
+                i = s[v]
+                if i in vl.vars:
+                    if vl.typeName == 'class' and vl.makeType == 'instance':
+                        return
+                    vl = vl.vars[i]
+                else:
+                    return
+            vl.vars[s[-1]] = data
     def varget(self,name):
         class vl:
+            typeName = 'null'
             vars = {}
         for i,v in self._globs.items():
             vl.vars[i] = v
@@ -157,6 +205,8 @@ class xmlang:
             vl.vars[i] = v
         for i in name.split('.'):
             if i in vl.vars:
+                if vl.typeName == 'class' and vl.makeType == 'instance':
+                    self.error("ClassError",f"Can not get value of instance class {vl.name} in {name}")
                 vl = vl.vars[i]
             else:
                 self.error("DefineError",f"Name {i} is not defined in {name}")

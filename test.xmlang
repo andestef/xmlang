@@ -1,11 +1,16 @@
 <xmlang version='1.0.0'>
-<class name='c' type='static'>
+<class name='c'>
 <public>
+<funct name='c' test='test'>
+<string name='this.a'>{var: test}</string>
+</funct>
 <funct name='test'>
 <print text='HI'/>
 </funct>
-<string name='a'>Hello</string>
 </public>
 </class>
-<print text='{var: c.a}' />
+<c name='q' test='aaaaaaaaaaaaaAAa' />
+<c name='w' test='z' /> 
+<w.test />
+<print text='{var: w.a}'/>
 </xmlang>
