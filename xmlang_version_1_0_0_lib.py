@@ -84,22 +84,22 @@ class xmlang:
                 if self.makeType == 'static':
                     n = deepcopy(child.attrib['name'])
                     del child.attrib['name']
-                    ags = caller.autoGlob(False)
+                    ags = caller._autoGlob(False)
                     caller.varset('this',self)
                     if not self.name in self.vars:
                         caller.error("ClassError",f"Class {self.name} missing self named constructor")
                     self.vars[self.name].onCall(caller,child)
                     var = caller.varget('this')
-                    caller.autoGlob(ags)
+                    caller._autoGlob(ags)
                     caller.varset(n,var)
                 else:
                     n = deepcopy(child.attrib['name'])
                     del child.attrib['name']
-                    ags = caller.autoGlob(False)
+                    ags = caller._autoGlob(False)
                     caller.varset('this',caller.types.classType(n,self.const,deepcopy(self.vars),'static'))
                     self.vars[self.name].onCall(caller,child)
                     var = caller.varget('this')
-                    caller.autoGlob(ags)
+                    caller._autoGlob(ags)
                     caller.varset(n,var)
             def __init__(self,name,const,cvars,makeType):
                 self.const = const
@@ -108,16 +108,16 @@ class xmlang:
                 self.makeType = makeType
             def make(caller, child):
                 t = 'static' if 'static' in child.attrib else 'instance'
-                caller.setClass(child.attrib['name'],'const' in list(child.attrib.keys()),t)
-                ags = caller.autoGlob(False)
-                locs = caller.locsState()
+                caller._setClass(child.attrib['name'],'const' in list(child.attrib.keys()),t)
+                ags = caller._autoGlob(False)
+                locs = caller._locsState()
                 cl = []
                 for i in child:
                     cl.append(i)
                 caller.run(cl)
-                var = caller.endClass()
-                caller.autoGlob(ags)
-                caller.locsState(locs)
+                var = caller._endClass()
+                caller._autoGlob(ags)
+                caller._locsState(locs)
                 if t == 'instance' and not child.attrib['name'] in list(var.vars.keys()):
                     caller.error("ClassError",f"Class {child.attrib['name']} missing self named constructor")
                 caller.varset(child.attrib['name'],var)
@@ -139,24 +139,24 @@ class xmlang:
         print(f"XMLANG Error {typ}{' (fatal)' if fatal else ''}: {reason}.")
         if fatal:
             quit(1)
-    def autoGlob(self,state):
+    def _autoGlob(self,state):
         a = self._autoglob
         self._autoglob = state
         return a
-    def setClass(self,name,const,maketype,vars={}):
+    def _setClass(self,name,const,maketype,vars={}):
         if self._className == '':
             self._className = name
         else:
             self._className += '.'+name
         self._class.insert(0,self.types.classType(self._className,const,vars,maketype))
-    def endClass(self):
+    def _endClass(self):
         v = deepcopy(self._class[0])
         del self._class[0]
         cn = self._className[::-1].split('.')
         del cn[0]
         self._className = '.'.join(cn[::-1])
         return v
-    def locsState(self,sv=None):
+    def _locsState(self,sv=None):
         if sv == None:
             v = deepcopy(self._locs)
             self._locs = {}

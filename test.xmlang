@@ -10,7 +10,7 @@
 </public>
 </class>
 <c name='q' test='aaaaaaaaaaaaaAAa' />
-<c name='w' test='z' /> 
+<c name='w' test='z' />
 <w.test />
 <print text='{var: w.a}'/>
 </xmlang>
