@@ -1,16 +1,16 @@
 <xmlang version='1.0.0'>
-<class name='c'>
+<class to='c'>
 <public>
-<funct name='c' test='test'>
-<string name='this.a'>{var: test}</string>
+<funct to='c' test='test'>
+<string to='this.a'>{var: test}</string>
 </funct>
-<funct name='test'>
+<funct to='test'>
 <print text='HI'/>
 </funct>
 </public>
 </class>
-<c name='q' test='aaaaaaaaaaaaaAAa' />
-<c name='w' test='z' />
+<c to='q' test='aaaaaaaaaaaaaAAa' />
+<c to='w' test='z' />
 <w.test />
 <print text='{var: w.a}'/>
 </xmlang>

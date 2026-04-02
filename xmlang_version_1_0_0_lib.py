@@ -5,6 +5,7 @@ class xmlang:
     class types:
         class funct:
             typeName = "funct"
+            vars = {}
             def __init__(self,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=False,const=False):
                 self.takesChildren = takesChildren
                 self.children = children
@@ -15,7 +16,7 @@ class xmlang:
             def make(caller, child):
                 reqArgs = []
                 optArgs = {}
-                fargs = ['name',"takesChildren", "kwargs"]
+                fargs = ['to',"takesChildren", "kwargs"]
                 for i,v in child.attrib.items():
                     if not i in fargs:
                         if i == v:
@@ -28,7 +29,7 @@ class xmlang:
                 for i in child:
                     cl.append(i)
                 f = caller.types.funct(cl,reqArgs,optArgs,'takesChildren' in list(child.attrib.keys()),False,'const' in list(child.attrib.keys()))
-                caller.varset(child.attrib['name'],f)
+                caller.varset(child.attrib['to'],f)
             def onCall(self, caller, child):
                 oag = caller._autoglob
                 caller._autoglob = False
@@ -50,24 +51,29 @@ class xmlang:
                         caller.varset(i,v)
                 if unusedReqs != []:
                     caller.error("CallError",f"Call to {child.tag} missing required argument {unusedReqs[0]}")
+                op = caller._cPath
+                caller._cPath += "."+child.tag
                 caller.run(self.children)
+                caller._cPath = op
                 caller._autoglob = oag
                 caller._langcall = odb
             def toString(self):
                 return f"Function with required args: {self.reqargs} and optional args {self.optargs}"
         class string:
             typeName = "string"
+            vars = {}
             def onCall(self,caller, child):
                 print(self.value)
             def make(caller, child):
                 f = caller.types.string(caller._textProcess(child.text).toString(),'const' in list(child.attrib.keys()))
-                caller.varset(child.attrib['name'],f)
+                caller.varset(child.attrib['to'],f)
             def __init__(self,value,const=False):
                 self.value = value
                 self.const = const
             def toString(self):
                 return self.value
         class null:
+            vars = {}
             typeName = "null"
             def onCall(self,caller, child):
                 print("null")
@@ -75,29 +81,36 @@ class xmlang:
                 self.const = const
             def make(caller, child):
                 f = caller.types.null('const' in list(child.attrib.keys()))
-                caller.varset(child.attrib['name'],f)
+                caller.varset(child.attrib['to'],f)
             def toString(self):
                 return "null"
         class classType:
             typeName = "class"
+            vars = {}
             def onCall(self,caller, child):
                 if self.makeType == 'static':
-                    n = deepcopy(child.attrib['name'])
-                    del child.attrib['name']
+                    n = deepcopy(child.attrib['to'])
+                    del child.attrib['to']
                     ags = caller._autoGlob(False)
                     caller.varset('this',self)
                     if not self.name in self.vars:
                         caller.error("ClassError",f"Class {self.name} missing self named constructor")
+                    op = caller._cPath
+                    caller._cPath += '.'+child.tag
                     self.vars[self.name].onCall(caller,child)
+                    caller._cPath = op
                     var = caller.varget('this')
                     caller._autoGlob(ags)
                     caller.varset(n,var)
                 else:
-                    n = deepcopy(child.attrib['name'])
-                    del child.attrib['name']
+                    n = deepcopy(child.attrib['to'])
+                    del child.attrib['to']
                     ags = caller._autoGlob(False)
                     caller.varset('this',caller.types.classType(n,self.const,deepcopy(self.vars),'static'))
+                    op = caller._cPath
+                    caller._cPath += '.'+child.tag
                     self.vars[self.name].onCall(caller,child)
+                    caller._cPath = op
                     var = caller.varget('this')
                     caller._autoGlob(ags)
                     caller.varset(n,var)
@@ -108,19 +121,22 @@ class xmlang:
                 self.makeType = makeType
             def make(caller, child):
                 t = 'static' if 'static' in child.attrib else 'instance'
-                caller._setClass(child.attrib['name'],'const' in list(child.attrib.keys()),t)
+                caller._setClass(child.attrib['to'],'const' in list(child.attrib.keys()),t)
                 ags = caller._autoGlob(False)
                 locs = caller._locsState()
                 cl = []
                 for i in child:
                     cl.append(i)
+                op = caller._cPath
+                caller._cPath += '.'+child.attrib['to']
                 caller.run(cl)
+                caller._cPath = op
                 var = caller._endClass()
                 caller._autoGlob(ags)
                 caller._locsState(locs)
-                if t == 'instance' and not child.attrib['name'] in list(var.vars.keys()):
-                    caller.error("ClassError",f"Class {child.attrib['name']} missing self named constructor")
-                caller.varset(child.attrib['name'],var)
+                if t == 'instance' and not child.attrib['to'] in list(var.vars.keys()):
+                    caller.error("ClassError",f"Class {child.attrib['to']} missing self named constructor")
+                caller.varset(child.attrib['to'],var)
             def toString(self):
                 return f"Class {self.name} with children: {','.join([i.name for i in self.children])}."
         types = {"funct":funct,"string":string,"null":null,"class":classType}
@@ -134,6 +150,8 @@ class xmlang:
         self._consts = []
         self._aSpec = 'public'
         self._retv = self.types.null()
+        self._retr = False
+        self._cPath = "main"
         self._buildBuiltins()
     def error(self,typ,reason="",fatal=True):
         print(f"XMLANG Error {typ}{' (fatal)' if fatal else ''}: {reason}.")
@@ -276,6 +294,8 @@ class xmlang:
         elif child.attrib['command'] == 'printvars':
             print("Locs: "+str(self._locs))
             print("Globs: "+str(self._globs))
+        elif child.attrib['command'] == 'whereAmI':
+            self.varset(child.attrib['to'],self.types.string(self._cPath,False))
     def addTag(self,tagname,data):
         self._tags[tagname] = data
     def _tag_public(self,child):
