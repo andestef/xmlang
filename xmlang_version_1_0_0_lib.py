@@ -285,7 +285,7 @@ class xmlang:
             if self._retr and self._cPath != 'main':
                 return
     def _textProcess(self,text):
-        m = re.match(r"^[ \n\t]*\{var:[ \n\t]*([A-Za-z_\$]+[A-Za-z0-9_\.\$]*)[ \n\t]*\}[ \n\t]*$",text)
+        m = re.match(r"^[ \n\t]*\{var:[ \n\t]*([A-Za-z_\$]+[A-Za-z0-9_\.]*)[ \n\t]*\}[ \n\t]*$",text)
         if m:
             return self.varget(m[1])
         else:
@@ -300,8 +300,16 @@ class xmlang:
         cl = []
         for i in child:
             cl.append(i)
-        f = self.types.funct(cl,['text'],{},False,True)
+        f = self.types.funct(cl,['text'],{},False,True,True)
         self.varset("print",f)
+        cvars = {}
+        code = "<funct><langcall command='whereAmI-2' to='ret'> </langcall><return>{var: ret}</return></funct>"
+        child = ET.fromstring(code)
+        cl = []
+        for i in child:
+            cl.append(i)
+        cvars['current'] = self.types.funct(cl,[],{},False,True)
+        self.varset("builtins",self.types.classType("builtins",True,cvars,'static'))
     def _tag_langcall(self,child):
         if not self._langcall:
             self.error("LangCallError","Current funct does not have langcall permissions")
@@ -314,6 +322,10 @@ class xmlang:
             print("Globs: "+str(self._globs))
         elif child.attrib['command'] == 'whereAmI':
             self.varset(child.attrib['to'],self.types.string(self._cPath,False))
+        elif child.attrib['command'] == 'whereAmI-2':
+            v = self._cPath[::-1].replace(self._cPath.split(".")[-1][::-1]+'.',"",1)[::-1]
+            v = v[::-1].replace(v.split(".")[-1][::-1]+'.',"",1)[::-1]
+            self.varset(child.attrib['to'],self.types.string(v,False))
     def addTag(self,tagname,data):
         self._tags[tagname] = data
     def _tag_public(self,child):
