@@ -35,6 +35,10 @@ class xmlang:
                 caller._autoglob = False
                 odb = caller._langcall
                 caller._langcall = self.allowlangcall
+                takeRet = 'to' in list(child.attrib.keys())
+                if takeRet:
+                    toVal = deepcopy(child.attrib['to'])
+                    del child.attrib['to']
                 usedOpts = []
                 unusedReqs = deepcopy(self.reqargs)
                 for i,v in child.attrib.items():
@@ -57,6 +61,11 @@ class xmlang:
                 caller._cPath = op
                 caller._autoglob = oag
                 caller._langcall = odb
+                if takeRet:
+                    rv = deepcopy(caller._retv)
+                    caller.varset(toVal,rv)
+                caller._retv = caller.types.null()
+                caller._retr = False
             def toString(self):
                 return f"Function with required args: {self.reqargs} and optional args {self.optargs}"
         class string:
@@ -266,6 +275,8 @@ class xmlang:
                 self.varget(child.tag).onCall(self,child)
             else:
                 self.error("FunctError",f"Unknown tag: {child.tag}")
+            if self._retr and self._cPath != 'main':
+                return
     def _textProcess(self,text):
         m = re.match(r"^[ \n\t]*\{var:[ \n\t]*([A-Za-z_\$]+[A-Za-z0-9_\.\$]*)[ \n\t]*\}[ \n\t]*$",text)
         if m:
@@ -304,4 +315,7 @@ class xmlang:
         for i in child:
             cl.append(i)
         self.run(cl)
-    _tags = {'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True},'public':{"f":_tag_public,"reqattrib":[],"optattrib":[],'takesChildren':True}} #Optattrib=None is equiv to **kwargs
+    def _tag_return(self,child):
+        self._retr = True
+        self._retv = self._textProcess(child.text)
+    _tags = {'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True},'public':{"f":_tag_public,"reqattrib":[],"optattrib":[],'takesChildren':True},'return':{'f':_tag_return,'reqattrib':[],'optattrib':[],'takesChildren':True}} #Optattrib=None is equiv to **kwargs

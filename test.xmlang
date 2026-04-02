@@ -6,11 +6,16 @@
 </funct>
 <funct to='test'>
 <print text='HI'/>
+<funct to='ret'>
+<print text='hello world' />
+</funct>
+<return>{var: ret}</return>
 </funct>
 </public>
 </class>
 <c to='q' test='aaaaaaaaaaaaaAAa' />
-<c to='w' test='z' />
-<w.test />
+<c to='w' test='z'/>
+<w.test to='re'/>
 <print text='{var: w.a}'/>
+<re/>
 </xmlang>
