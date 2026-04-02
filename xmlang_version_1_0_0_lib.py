@@ -30,7 +30,7 @@ class xmlang:
                     cl.append(i)
                 f = caller.types.funct(cl,reqArgs,optArgs,'takesChildren' in list(child.attrib.keys()),False,'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
-            def onCall(self, caller, child):
+            def onCall(self, caller, child, adv={}):
                 oag = caller._autoglob
                 caller._autoglob = False
                 odb = caller._langcall
@@ -40,32 +40,40 @@ class xmlang:
                     toVal = deepcopy(child.attrib['to'])
                     del child.attrib['to']
                 usedOpts = []
+                vts = {}
                 unusedReqs = deepcopy(self.reqargs)
                 for i,v in child.attrib.items():
                     if i in self.reqargs:
-                        caller.varset(i,caller._textProcess(v))
+                        vts[i] = caller._textProcess(v)
                         unusedReqs.remove(i)
                     elif i in self.optargs:
-                        caller.varset(i,caller._textProcess(v))
+                        vts[i] = caller._textProcess(v)
                         usedOpts.append(i)
                     else:
                         caller.error("CallError",f"Call to {child.tag} has illegal argument {i}")
                 for i,v in self.optargs.items():
                     if not i in usedOpts:
-                        caller.varset(i,v)
+                        vts[i] = v
                 if unusedReqs != []:
                     caller.error("CallError",f"Call to {child.tag} missing required argument {unusedReqs[0]}")
+                locs = caller._locsState()
+                caller._locsState(adv)
+                for i,v in vts.items():
+                    caller.varset(i,v)
                 op = caller._cPath
                 caller._cPath += "."+child.tag
                 caller.run(self.children)
+                fvars = caller._locsState()
                 caller._cPath = op
                 caller._autoglob = oag
                 caller._langcall = odb
+                caller._locsState(locs)
                 if takeRet:
                     rv = deepcopy(caller._retv)
                     caller.varset(toVal,rv)
                 caller._retv = caller.types.null()
                 caller._retr = False
+                return fvars
             def toString(self):
                 return f"Function with required args: {self.reqargs} and optional args {self.optargs}"
         class string:
@@ -115,12 +123,11 @@ class xmlang:
                     n = deepcopy(child.attrib['to'])
                     del child.attrib['to']
                     ags = caller._autoGlob(False)
-                    caller.varset('this',caller.types.classType(n,self.const,deepcopy(self.vars),'static'))
                     op = caller._cPath
                     caller._cPath += '.'+child.tag
-                    self.vars[self.name].onCall(caller,child)
+                    v = self.vars[self.name].onCall(caller,child,{'this':caller.types.classType(n,self.const,deepcopy(self.vars),'static')})
                     caller._cPath = op
-                    var = caller.varget('this')
+                    var = v['this']
                     caller._autoGlob(ags)
                     caller.varset(n,var)
             def __init__(self,name,const,cvars,makeType):
@@ -310,6 +317,8 @@ class xmlang:
     def addTag(self,tagname,data):
         self._tags[tagname] = data
     def _tag_public(self,child):
+        if self._className == '':
+            self.error("ClassError","Can not set access modifier when not in a class")
         self._aSpec = 'public'
         cl = []
         for i in child:
