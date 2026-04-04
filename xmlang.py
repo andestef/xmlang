@@ -10,7 +10,7 @@ parser = etree.XMLParser(recover=True)
 s = open(filename).read()
 tree = etree.fromstring(s, parser)
 root = ET.fromstring(etree.tostring(tree).decode('utf-8'))
-#root = ET.fromstring(open(filenacaller.endClass()).read())
+#root = ET.fromstring(open(filename).read())
 if root.tag != "xmlang":
     print("XMLANG Error: Missing <xmlang> opening tag.")
 if not "version" in root.attrib:

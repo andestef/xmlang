@@ -1,22 +1,7 @@
 <xmlang version='1.0.0'>
-<class to='c'>
-<public>
-<funct to='c' test='test'>
-<string to='this.a'>{var: test}</string>
-</funct>
-<funct to='test'>
-<builtins.current to='v' />
-<print text='{v}'/>
-<funct to='ret'>
-<print text='hello world' />
-</funct>
-<return>{var: ret}</return>
-</funct>
-</public>
-</class>
-<c to='q' test='aaaaaaaaaaaaaAAa' />
-<c to='w' test='z'/>
-<q.test to='re'/>
-<print text='{var: w.a}'/>
-<re/>
+<int to='v' add=''>3.14</int>
+<v to='q' div='5' exp='2'/>
+<print text='{q}{v}' />
+<math.subtr v1='-1' v2='{q}' to='q'/>
+<print text='{q}' />
 </xmlang>

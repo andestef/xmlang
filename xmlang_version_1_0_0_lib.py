@@ -1,3 +1,4 @@
+# As far as I can tell, this needs >= Python 3.8
 import xml.etree.ElementTree as ET
 import re
 from copy import deepcopy
@@ -155,7 +156,93 @@ class xmlang:
                 caller.varset(child.attrib['to'],var)
             def toString(self):
                 return f"Class {self.name} with children: {','.join([i.name for i in self.children])}."
-        types = {"funct":funct,"string":string,"null":null,"class":classType}
+        class int:
+            typeName = "int"
+            vars = {}
+            def onCall(self,caller, child):
+                att = list(child.attrib.keys())
+                to = 'to' in att
+                fval = self.toInt()
+                if to:
+                    tv = deepcopy(child.attrib['to'])
+                    del child.attrib['to']
+                    att.remove('to')
+                if 'exp' in att:
+                    fval = int(fval**caller._textProcess(child.attrib['exp'],caller.types.int).toInt())
+                if 'mult' in att and 'div' in att:
+                    if att.index('mult')<att.index('div'): # Multiplication before division
+                        fval = int(fval*caller._textProcess(child.attrib['mult'],caller.types.int).toInt())
+                        fval = int(fval/caller._textProcess(child.attrib['div'],caller.types.int).toInt())
+                    else:
+                        fval = int(fval/caller._textProcess(child.attrib['div'],caller.types.int).toInt())
+                        fval = int(fval*caller._textProcess(child.attrib['mult'],caller.types.int).toInt())
+                elif 'mult' in att:
+                    fval = int(fval*caller._textProcess(child.attrib['mult'],caller.types.int).toInt())
+                elif 'div' in att:
+                    fval = int(fval/caller._textProcess(child.attrib['div'],caller.types.int).toInt())
+                if 'add' in att and 'subtr' in att:
+                    if att.index('add')<att.index('subtr'): # Multiplication before division
+                        fval = int(fval+caller._textProcess(child.attrib['add'],caller.types.int).toInt())
+                        fval = int(fval-caller._textProcess(child.attrib['subtr'],caller.types.int).toInt())
+                    else:
+                        fval = int(fval-caller._textProcess(child.attrib['subtr'],caller.types.int).toInt())
+                        fval = int(fval+caller._textProcess(child.attrib['add'],caller.types.int).toInt())
+                elif 'add' in att:
+                    fval = int(fval+caller._textProcess(child.attrib['add'],caller.types.int).toInt())
+                elif 'subtr' in att:
+                    fval = int(fval-caller._textProcess(child.attrib['subtr'],caller.types.int).toInt())
+                if to:
+                    caller.varset(tv,caller.types.int(str(fval)))
+                else:
+                    self.value = str(fval)
+            def __init__(self,val,const=False):
+                self.value = val
+            def toInt(self):
+                return int(self.value)
+            def make(caller, child):
+                val = caller._textProcess(child.text).toString()
+                v = ''
+                pos = 0
+                dot = False
+                for i in val:
+                    if dot:
+                        pass
+                    elif i == '-':
+                        if pos != 0:
+                            caller.error("TypeError","Can not have negative symbol not at begining of int.")
+                        else:
+                            v += '-'
+                    elif i == '0':
+                        if pos != 0:
+                            v += '0'
+                    elif i == '1':
+                        v += '1'
+                    elif i == '2':
+                        v += '2'
+                    elif i == '3':
+                        v += '3'
+                    elif i == '4':
+                        v += '4'
+                    elif i == '5':
+                        v += '5'
+                    elif i == '6':
+                        v += '6'
+                    elif i == '7':
+                        v += '7'
+                    elif i == '8':
+                        v += '8'
+                    elif i == '9':
+                        v += '9'
+                    elif i == '.':
+                        dot = True
+                    else:
+                        caller.error("TypeError",f"Illegal character in int: \"{i}\"")
+                    pos += 1
+                f = caller.types.int(v,'const' in list(child.attrib.keys()))
+                caller.varset(child.attrib['to'],f)
+            def toString(self):
+                return self.value
+        types = {"funct":funct,"string":string,"null":null,"class":classType,'int':int}
     def __init__(self,langcall=False):
         self._globs = {}
         self._langcall = langcall
@@ -284,16 +371,18 @@ class xmlang:
                 self.error("FunctError",f"Unknown tag: {child.tag}")
             if self._retr and self._cPath != 'main':
                 return
-    def _textProcess(self,text):
+    def _textProcess(self,text,cast=types.string):
         m = re.match(r"^[ \n\t]*\{var:[ \n\t]*([A-Za-z_\$]+[A-Za-z0-9_\.]*)[ \n\t]*\}[ \n\t]*$",text)
         if m:
             return self.varget(m[1])
         else:
-            v = re.match(r"\{([^\}]*)\}",text)
-            while v != None:
-                text = text.replace(v[0],self.varget(v[1]).toString())
-                v = re.match(r"\{([^\}]*)\}",text)
-            return self.types.string(text)
+            v = re.finditer(r"(^|[^\\])(\{[ \n\t]*([^\} \n\t]*)[ \n\t]*(?=\}))",text)
+            for i in v:
+                text = text.replace(i[2]+'}',self.varget(i[3]).toString())
+            v = re.finditer(r"\\(\{[ \n\t]*([^\} \n\t]*)[ \n\t]*\})",text)
+            for i in v:
+                text = text.replace(i[0],i[1])
+            return cast(text)
     def _buildBuiltins(self):
         code = "<funct><langcall command='print' text='{var: text}'> </langcall></funct>"
         child = ET.fromstring(code)
@@ -309,7 +398,45 @@ class xmlang:
         for i in child:
             cl.append(i)
         cvars['current'] = self.types.funct(cl,[],{},False,True)
+        code = "<funct><return>{var: data}</return></funct>"
+        child = ET.fromstring(code)
+        cl = []
+        for i in child:
+            cl.append(i)
+        cvars['textprocess'] = self.types.funct(cl,['data'],{},False,True)
         self.varset("builtins",self.types.classType("builtins",True,cvars,'static'))
+        cvars = {}
+        code = "<funct><int to='v1'>{v1}</int><v1 add='{v2}' /><return>{var: v1}</return></funct>"
+        child = ET.fromstring(code)
+        cl = []
+        for i in child:
+            cl.append(i)
+        cvars['add'] = self.types.funct(cl,['v1','v2'],{},False,True)
+        code = "<funct><int to='v1'>{v1}</int><v1 subtr='{v2}' /><return>{var: v1}</return></funct>"
+        child = ET.fromstring(code)
+        cl = []
+        for i in child:
+            cl.append(i)
+        cvars['subtr'] = self.types.funct(cl,['v1','v2'],{},False,True)
+        code = "<funct><int to='v1'>{v1}</int><v1 mult='{v2}' /><return>{var: v1}</return></funct>"
+        child = ET.fromstring(code)
+        cl = []
+        for i in child:
+            cl.append(i)
+        cvars['mult'] = self.types.funct(cl,['v1','v2'],{},False,True)
+        code = "<funct><int to='v1'>{v1}</int><v1 div='{v2}' /><return>{var: v1}</return></funct>"
+        child = ET.fromstring(code)
+        cl = []
+        for i in child:
+            cl.append(i)
+        cvars['div'] = self.types.funct(cl,['v1','v2'],{},False,True)
+        code = "<funct><int to='v1'>{v1}</int><v1 exp='{v2}' /><return>{var: v1}</return></funct>"
+        child = ET.fromstring(code)
+        cl = []
+        for i in child:
+            cl.append(i)
+        cvars['exp'] = self.types.funct(cl,['v1','v2'],{},False,True)
+        self.varset("math",self.types.classType("math",True,cvars,'static'))
     def _tag_langcall(self,child):
         if not self._langcall:
             self.error("LangCallError","Current funct does not have langcall permissions")
