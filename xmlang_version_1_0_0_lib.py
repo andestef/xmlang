@@ -197,6 +197,7 @@ class xmlang:
                     self.value = str(fval)
             def __init__(self,val,const=False):
                 self.value = val
+                self.const = const
             def toInt(self):
                 return int(self.value)
             def make(caller, child):
@@ -250,7 +251,6 @@ class xmlang:
         self._locs = {}
         self._class = [self.types.null()]
         self._className = ""
-        self._consts = []
         self._aSpec = 'public'
         self._retv = self.types.null()
         self._retr = False
@@ -284,12 +284,11 @@ class xmlang:
             return v
         else:
             self._locs = sv
-    def varset(self,name,data,glob=False):
-        if name in self._consts:
-            self.error("DefineError",f"Variable {name} is constant")
+    def varset(self,name,data,glob=False,overrideConst=False):
         if self._class[0].typeName != "null":
             self._class[0].vars[name] = data
         class vl:
+            const = False
             typeName = 'null'
             vars = self._locs
         s = name.split('.')
@@ -299,8 +298,13 @@ class xmlang:
                 if vl.typeName == 'class' and vl.makeType == 'instance':
                     self.error("ClassError",f"Can not set value of instance class {vl.name} in {name}")
                 vl = vl.vars[i]
+                if vl.const:
+                    self.error("DefineError",f"Name {i} is constant")
             else:
                 self.error("DefineError",f"Name {i} is not defined in {name}")
+        if not overrideConst and s[-1] in list(vl.vars.keys()):
+            if vl.vars[s[-1]].const:
+                self.error("DefineError",f"Name {s[-1]} is constant")
         vl.vars[s[-1]] = data
         if self._autoglob or glob:
             class vl:
@@ -313,7 +317,12 @@ class xmlang:
                     if vl.typeName == 'class' and vl.makeType == 'instance':
                         return
                     vl = vl.vars[i]
+                    if vl.const:
+                        return
                 else:
+                    return
+            if not overrideConst and s[-1] in vl.vars:
+                if vl.vars[s[-1]].const:
                     return
             vl.vars[s[-1]] = data
     def varget(self,name):
