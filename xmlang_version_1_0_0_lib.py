@@ -7,7 +7,7 @@ class xmlang:
         class funct:
             typeName = "funct"
             vars = {}
-            def __init__(self,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=False,const=False):
+            def __init__(self,caller,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=False,const=False):
                 self.takesChildren = takesChildren
                 self.children = children
                 self.reqargs = reqargs
@@ -29,7 +29,7 @@ class xmlang:
                 cl = []
                 for i in child:
                     cl.append(i)
-                f = caller.types.funct(cl,reqArgs,optArgs,'takesChildren' in list(child.attrib.keys()),False,'const' in list(child.attrib.keys()))
+                f = caller.types.funct(caller,cl,reqArgs,optArgs,'takesChildren' in list(child.attrib.keys()),False,'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
             def onCall(self, caller, child, adv={}):
                 oag = caller._autoglob
@@ -72,7 +72,7 @@ class xmlang:
                 if takeRet:
                     rv = deepcopy(caller._retv)
                     caller.varset(toVal,rv)
-                caller._retv = caller.types.null()
+                caller._retv = caller.types.null(caller)
                 caller._retr = False
                 return fvars
             def toString(self):
@@ -83,9 +83,9 @@ class xmlang:
             def onCall(self,caller, child):
                 print(self.value)
             def make(caller, child):
-                f = caller.types.string(caller._textProcess(child.text).toString(),'const' in list(child.attrib.keys()))
+                f = caller.types.string(caller,caller._textProcess(child.text).toString(),'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
-            def __init__(self,value,const=False):
+            def __init__(self,caller,value,const=False):
                 self.value = value
                 self.const = const
             def toString(self):
@@ -95,10 +95,10 @@ class xmlang:
             typeName = "null"
             def onCall(self,caller, child):
                 print("null")
-            def __init__(self,const=False):
+            def __init__(self,caller,const=False):
                 self.const = const
             def make(caller, child):
-                f = caller.types.null('const' in list(child.attrib.keys()))
+                f = caller.types.null(caller,'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
             def toString(self):
                 return "null"
@@ -126,12 +126,12 @@ class xmlang:
                     ags = caller._autoGlob(False)
                     op = caller._cPath
                     caller._cPath += '.'+child.tag
-                    v = self.vars[self.name].onCall(caller,child,{'this':caller.types.classType(n,self.const,deepcopy(self.vars),'static')})
+                    v = self.vars[self.name].onCall(caller,child,{'this':caller.types.classType(caller,n,self.const,deepcopy(self.vars),'static')})
                     caller._cPath = op
                     var = v['this']
                     caller._autoGlob(ags)
                     caller.varset(n,var)
-            def __init__(self,name,const,cvars,makeType):
+            def __init__(self,caller,name,const,cvars,makeType):
                 self.const = const
                 self.name = name
                 self.vars = cvars
@@ -192,14 +192,32 @@ class xmlang:
                 elif 'subtr' in att:
                     fval = int(fval-caller._textProcess(child.attrib['subtr'],caller.types.int).toInt())
                 if to:
-                    caller.varset(tv,caller.types.int(str(fval)))
+                    caller.varset(tv,caller.types.int(caller,str(fval)))
                 else:
                     self.value = str(fval)
-            def __init__(self,val,const=False):
+            def __init__(self,caller,val,const=False):
                 self.value = val
                 self.const = const
             def toInt(self):
                 return int(self.value)
+            def isInt(val):
+                pos = 0
+                dot = False
+                for i in val:
+                    if dot:
+                        if not i in ['0','1','2','3','4','5','6','7','8','9']:
+                            return False
+                    elif i == '-':
+                        if pos != 0:
+                            return False
+                    elif i in ['0','1','2','3','4','5','6','7','8','9']:
+                        pass
+                    elif i == '.':
+                        dot = True
+                    else:
+                        return False
+                    pos += 1
+                return True
             def make(caller, child):
                 val = caller._textProcess(child.text).toString()
                 v = ''
@@ -207,7 +225,8 @@ class xmlang:
                 dot = False
                 for i in val:
                     if dot:
-                        pass
+                        if not i in ['0','1','2','3','4','5','6','7','8','9']:
+                            caller.error("TypeError",f"Illegal character in int: \"{i}\"")
                     elif i == '-':
                         if pos != 0:
                             caller.error("TypeError","Can not have negative symbol not at begining of int.")
@@ -239,20 +258,38 @@ class xmlang:
                     else:
                         caller.error("TypeError",f"Illegal character in int: \"{i}\"")
                     pos += 1
-                f = caller.types.int(v,'const' in list(child.attrib.keys()))
+                f = caller.types.int(caller,v,'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
             def toString(self):
                 return self.value
-        types = {"funct":funct,"string":string,"null":null,"class":classType,'int':int}
+        class char:
+            typeName = "char"
+            vars = {}
+            def onCall(self,caller, child):
+                print(self.value)
+            def make(caller, child):
+                f = caller.types.char(caller,caller._textProcess(child.text).toString(),'const' in list(child.attrib.keys()))
+                caller.varset(child.attrib['to'],f)
+            def __init__(self,caller,value,const=False):
+                if caller.types.int.isInt(value):
+                    self.value = chr(caller.types.int(caller,value).toInt())
+                else:
+                    self.value = value[0]
+                self.const = const
+            def toString(self):
+                return self.value
+            def toInt(self):
+                return ord(self.value)
+        types = {"funct":funct,"string":string,"null":null,"class":classType,'int':int,'char':char}
     def __init__(self,langcall=False):
         self._globs = {}
         self._langcall = langcall
         self._autoglob = True
         self._locs = {}
-        self._class = [self.types.null()]
+        self._class = [self.types.null(self)]
         self._className = ""
         self._aSpec = 'public'
-        self._retv = self.types.null()
+        self._retv = self.types.null(self)
         self._retr = False
         self._cPath = "main"
         self._buildBuiltins()
@@ -269,7 +306,7 @@ class xmlang:
             self._className = name
         else:
             self._className += '.'+name
-        self._class.insert(0,self.types.classType(self._className,const,vars,maketype))
+        self._class.insert(0,self.types.classType(self,self._className,const,vars,maketype))
     def _endClass(self):
         v = deepcopy(self._class[0])
         del self._class[0]
@@ -389,7 +426,7 @@ class xmlang:
             v = re.finditer(r"\\(\{[ \n\t]*([^\} \n\t]*)[ \n\t]*\})",text)
             for i in v:
                 text = text.replace(i[0],i[1])
-            return cast(text)
+            return cast(self,text)
     def _buildBuiltins(self):
         code = """<outer>
         <builtinvar-print><langcall command='print' text='{var: text}'> </langcall></builtinvar-print>
@@ -403,19 +440,19 @@ class xmlang:
         </outer>"""
         child = ET.fromstring(code)
         children = [i for i in child]
-        f = self.types.funct([i for i in children[0]],['text'],{},False,True,True)
+        f = self.types.funct(self,[i for i in children[0]],['text'],{},False,True,True)
         self.varset("print",f)
         cvars = {}
-        cvars['current'] = self.types.funct([i for i in children[1]],[],{},False,True)
-        cvars['textprocess'] = self.types.funct([i for i in children[2]],['data'],{},False,True)
-        self.varset("builtins",self.types.classType("builtins",True,cvars,'static'))
+        cvars['current'] = self.types.funct(self,[i for i in children[1]],[],{},False,True)
+        cvars['textprocess'] = self.types.funct(self,[i for i in children[2]],['data'],{},False,True)
+        self.varset("builtins",self.types.classType(self,"builtins",True,cvars,'static'))
         cvars = {}
-        cvars['add'] = self.types.funct([i for i in children[3]],['v1','v2'],{},False,True)
-        cvars['subtr'] = self.types.funct([i for i in children[4]],['v1','v2'],{},False,True)
-        cvars['mult'] = self.types.funct([i for i in children[5]],['v1','v2'],{},False,True)
-        cvars['div'] = self.types.funct([i for i in children[6]],['v1','v2'],{},False,True)
-        cvars['exp'] = self.types.funct([i for i in children[7]],['v1','v2'],{},False,True)
-        self.varset("math",self.types.classType("math",True,cvars,'static'))
+        cvars['add'] = self.types.funct(self,[i for i in children[3]],['v1','v2'],{},False,True)
+        cvars['subtr'] = self.types.funct(self,[i for i in children[4]],['v1','v2'],{},False,True)
+        cvars['mult'] = self.types.funct(self,[i for i in children[5]],['v1','v2'],{},False,True)
+        cvars['div'] = self.types.funct(self,[i for i in children[6]],['v1','v2'],{},False,True)
+        cvars['exp'] = self.types.funct(self,[i for i in children[7]],['v1','v2'],{},False,True)
+        self.varset("math",self.types.classType(self,"math",True,cvars,'static'))
     def _tag_langcall(self,child):
         if not self._langcall:
             self.error("LangCallError","Current funct does not have langcall permissions")
@@ -427,11 +464,11 @@ class xmlang:
             print("Locs: "+str(self._locs))
             print("Globs: "+str(self._globs))
         elif child.attrib['command'] == 'whereAmI':
-            self.varset(child.attrib['to'],self.types.string(self._cPath,False))
+            self.varset(child.attrib['to'],self.types.string(self,self._cPath,False))
         elif child.attrib['command'] == 'whereAmI-2':
             v = self._cPath[::-1].replace(self._cPath.split(".")[-1][::-1]+'.',"",1)[::-1]
             v = v[::-1].replace(v.split(".")[-1][::-1]+'.',"",1)[::-1]
-            self.varset(child.attrib['to'],self.types.string(v,False))
+            self.varset(child.attrib['to'],self.types.string(self,v,False))
     def addTag(self,tagname,data):
         self._tags[tagname] = data
     def _tag_public(self,child):

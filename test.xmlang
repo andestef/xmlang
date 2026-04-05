@@ -1,15 +1,4 @@
 <xmlang version='1.0.0'>
-<int to='v' add=''>3.14</int>
-<v to='q' div='5' exp='2'/>
-<print text='{q}{v}' />
-<math.subtr v1='-1' v2='{q}' to='q'/>
-<int to='q'>{q}</int>
+<char to='q'>bca</char>
 <print text='{q}' />
-<string to='q'>HIO</string>
-<print text='{q}' />
-<class to='math' static='static'>
-<funct to='add'>
-<print text='WRONG' />
-</funct>
-</class>
 </xmlang>
