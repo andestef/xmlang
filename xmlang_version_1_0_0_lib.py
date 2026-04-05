@@ -333,7 +333,6 @@ class xmlang:
                 self.error("DefineError",f"Name {i} is not defined in {name}")
         return vl
     def varexists(self,name):
-        e = True
         class vl:
             vars = {}
         for i,v in self._globs.items():
@@ -344,9 +343,8 @@ class xmlang:
             if i in vl.vars:
                 vl = vl.vars[i]
             else:
-                e = False
-                break
-        return e
+                return False
+        return True
     def run(self,tree):
         for child in tree:
             if child.tag in self._tags:
@@ -384,58 +382,30 @@ class xmlang:
                 text = text.replace(i[0],i[1])
             return cast(text)
     def _buildBuiltins(self):
-        code = "<funct><langcall command='print' text='{var: text}'> </langcall></funct>"
+        code = """<outer>
+        <builtinvar-print><langcall command='print' text='{var: text}'> </langcall></builtinvar-print>
+        <buildvar-builtin-current><langcall command='whereAmI-2' to='ret'> </langcall><return>{var: ret}</return></buildvar-builtin-current>
+        <buildvar-builtin-textprocess><return>{var: data}</return></buildvar-builtin-textprocess>
+        <buildvar-math-add><int to='v1'>{v1}</int><v1 add='{v2}' /><return>{var: v1}</return></buildvar-math-add>
+        <buildvar-math-subtr><int to='v1'>{v1}</int><v1 subtr='{v2}' /><return>{var: v1}</return></buildvar-math-subtr>
+        <buildvar-math-mult><int to='v1'>{v1}</int><v1 mult='{v2}' /><return>{var: v1}</return></buildvar-math-mult>
+        <buildvar-math-div><int to='v1'>{v1}</int><v1 div='{v2}' /><return>{var: v1}</return></buildvar-math-div>
+        <buildvar-math-exp><int to='v1'>{v1}</int><v1 exp='{v2}' /><return>{var: v1}</return></buildvar-math-exp>
+        </outer>"""
         child = ET.fromstring(code)
-        cl = []
-        for i in child:
-            cl.append(i)
-        f = self.types.funct(cl,['text'],{},False,True,True)
+        children = [i for i in child]
+        f = self.types.funct([i for i in children[0]],['text'],{},False,True,True)
         self.varset("print",f)
         cvars = {}
-        code = "<funct><langcall command='whereAmI-2' to='ret'> </langcall><return>{var: ret}</return></funct>"
-        child = ET.fromstring(code)
-        cl = []
-        for i in child:
-            cl.append(i)
-        cvars['current'] = self.types.funct(cl,[],{},False,True)
-        code = "<funct><return>{var: data}</return></funct>"
-        child = ET.fromstring(code)
-        cl = []
-        for i in child:
-            cl.append(i)
-        cvars['textprocess'] = self.types.funct(cl,['data'],{},False,True)
+        cvars['current'] = self.types.funct([i for i in children[1]],[],{},False,True)
+        cvars['textprocess'] = self.types.funct([i for i in children[2]],['data'],{},False,True)
         self.varset("builtins",self.types.classType("builtins",True,cvars,'static'))
         cvars = {}
-        code = "<funct><int to='v1'>{v1}</int><v1 add='{v2}' /><return>{var: v1}</return></funct>"
-        child = ET.fromstring(code)
-        cl = []
-        for i in child:
-            cl.append(i)
-        cvars['add'] = self.types.funct(cl,['v1','v2'],{},False,True)
-        code = "<funct><int to='v1'>{v1}</int><v1 subtr='{v2}' /><return>{var: v1}</return></funct>"
-        child = ET.fromstring(code)
-        cl = []
-        for i in child:
-            cl.append(i)
-        cvars['subtr'] = self.types.funct(cl,['v1','v2'],{},False,True)
-        code = "<funct><int to='v1'>{v1}</int><v1 mult='{v2}' /><return>{var: v1}</return></funct>"
-        child = ET.fromstring(code)
-        cl = []
-        for i in child:
-            cl.append(i)
-        cvars['mult'] = self.types.funct(cl,['v1','v2'],{},False,True)
-        code = "<funct><int to='v1'>{v1}</int><v1 div='{v2}' /><return>{var: v1}</return></funct>"
-        child = ET.fromstring(code)
-        cl = []
-        for i in child:
-            cl.append(i)
-        cvars['div'] = self.types.funct(cl,['v1','v2'],{},False,True)
-        code = "<funct><int to='v1'>{v1}</int><v1 exp='{v2}' /><return>{var: v1}</return></funct>"
-        child = ET.fromstring(code)
-        cl = []
-        for i in child:
-            cl.append(i)
-        cvars['exp'] = self.types.funct(cl,['v1','v2'],{},False,True)
+        cvars['add'] = self.types.funct([i for i in children[3]],['v1','v2'],{},False,True)
+        cvars['subtr'] = self.types.funct([i for i in children[4]],['v1','v2'],{},False,True)
+        cvars['mult'] = self.types.funct([i for i in children[5]],['v1','v2'],{},False,True)
+        cvars['div'] = self.types.funct([i for i in children[6]],['v1','v2'],{},False,True)
+        cvars['exp'] = self.types.funct([i for i in children[7]],['v1','v2'],{},False,True)
         self.varset("math",self.types.classType("math",True,cvars,'static'))
     def _tag_langcall(self,child):
         if not self._langcall:
