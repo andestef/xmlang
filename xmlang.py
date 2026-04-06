@@ -1,16 +1,19 @@
-import xml.etree.ElementTree as ET
 from importlib import import_module
-filename = 'test.xmlang'
-# comment to 'If you dont want to...' if you dont want use command line mode and uncomment previous line
-'''from sys import argv
-filename = argv[1]'''
-# If you don't want to use lxml comment from here to the next comment, then uncomment that line
-from lxml import etree
-parser = etree.XMLParser(recover=True)
-s = open(filename).read()
-tree = etree.fromstring(s, parser)
-root = ET.fromstring(etree.tostring(tree).decode('utf-8'))
-#root = ET.fromstring(open(filename).read())
+commandline_mode = False #Use static filename or get filename from argv
+use_lxml = True #Use libary lxml (install with pip install lxml)
+if not commandline_mode:
+    filename = 'test.xmlang'
+else:
+    from sys import argv
+    filename = argv[1]
+if use_lxml:
+    from lxml import etree as ET
+    parser = ET.XMLParser(recover=True)
+    s = open(filename).read()
+    root = ET.fromstring(s, parser)
+else:
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(open(filename).read())
 if root.tag != "xmlang":
     print("XMLANG Error: Missing <xmlang> opening tag.")
 if not "version" in root.attrib:
@@ -18,5 +21,5 @@ if not "version" in root.attrib:
 else:
     version = root.attrib['version']
 v = import_module(f"xmlang.version.{version}.lib".replace(".","_"))
-lang = v.xmlang()
+lang = v.xmlang(ET)
 lang.run(root)

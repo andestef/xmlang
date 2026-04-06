@@ -1,5 +1,4 @@
 # As far as I can tell, this needs >= Python 3.8
-import xml.etree.ElementTree as ET
 import re
 from copy import deepcopy
 class xmlang:
@@ -8,6 +7,7 @@ class xmlang:
             typeName = "funct"
             vars = {}
             def __init__(self,caller,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=False,const=False):
+                self.vars['type'] = caller.types.type(caller,'funct',True)
                 self.takesChildren = takesChildren
                 self.children = children
                 self.reqargs = reqargs
@@ -81,11 +81,18 @@ class xmlang:
             typeName = "string"
             vars = {}
             def onCall(self,caller, child):
-                print(self.value)
+                if 'to' in child.attrib:
+                    caller.varset(child.attrib['to'],caller.types.types[self.typeName](caller,self.value,'const' in child.attrib))
+                else:
+                    print(self.value)
             def make(caller, child):
                 f = caller.types.string(caller,caller._textProcess(child.text).toString(),'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
-            def __init__(self,caller,value,const=False):
+            def __init__(self,caller,value,const=False,endloop=0):
+                if endloop < 2:
+                    self.vars['type'] = caller.types.type(caller,self.typeName,True,endloop+1)
+                else:
+                    self.vars['type'] = 'psudotype'
                 self.value = value
                 self.const = const
             def toString(self):
@@ -94,8 +101,12 @@ class xmlang:
             vars = {}
             typeName = "null"
             def onCall(self,caller, child):
-                print("null")
+                if 'to' in child.attrib:
+                    caller.varset(child.attrib['to'],caller.types.null(caller,'const' in child.attrib))
+                else:
+                    print('null')
             def __init__(self,caller,const=False):
+                self.vars['type'] = caller.types.type(caller,'null',True)
                 self.const = const
             def make(caller, child):
                 f = caller.types.null(caller,'const' in list(child.attrib.keys()))
@@ -132,6 +143,7 @@ class xmlang:
                     caller._autoGlob(ags)
                     caller.varset(n,var)
             def __init__(self,caller,name,const,cvars,makeType):
+                self.vars['type'] = caller.types.type(caller,'class',True)
                 self.const = const
                 self.name = name
                 self.vars = cvars
@@ -196,6 +208,7 @@ class xmlang:
                 else:
                     self.value = str(fval)
             def __init__(self,caller,val,const=False):
+                self.vars['type'] = caller.types.type(caller,'int',True)
                 self.value = val
                 self.const = const
             def toInt(self):
@@ -256,7 +269,10 @@ class xmlang:
                     elif i == '.':
                         dot = True
                     else:
-                        caller.error("TypeError",f"Illegal character in int: \"{i}\"")
+                        if pos == 0:
+                            v += str(ord(i))
+                        else:
+                            caller.error("TypeError",f"Illegal character in int: \"{i}\"")
                     pos += 1
                 f = caller.types.int(caller,v,'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
@@ -271,6 +287,7 @@ class xmlang:
                 f = caller.types.char(caller,caller._textProcess(child.text).toString(),'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
             def __init__(self,caller,value,const=False):
+                self.vars['type'] = caller.types.type(caller,'char',True)
                 if caller.types.int.isInt(value):
                     self.value = chr(caller.types.int(caller,value).toInt())
                 else:
@@ -280,8 +297,11 @@ class xmlang:
                 return self.value
             def toInt(self):
                 return ord(self.value)
-        types = {"funct":funct,"string":string,"null":null,"class":classType,'int':int,'char':char}
-    def __init__(self,langcall=False):
+        class type(string):
+            typeName = 'type'
+        types = {"funct":funct,"string":string,"null":null,"class":classType,'int':int,'char':char,'type':type}
+    def __init__(self,ET,langcall=False): # ET is the libary to load XML
+        self.ET = ET
         self._globs = {}
         self._langcall = langcall
         self._autoglob = True
@@ -331,6 +351,8 @@ class xmlang:
         s = name.split('.')
         for v in range(len(s)-1):
             i = s[v]
+            if vl == 'psudotype':
+                vl = self.types.type(self,'type',True)
             if i in vl.vars:
                 if vl.typeName == 'class' and vl.makeType == 'instance':
                     self.error("ClassError",f"Can not set value of instance class {vl.name} in {name}")
@@ -339,6 +361,8 @@ class xmlang:
                     self.error("DefineError",f"Name {i} is constant")
             else:
                 self.error("DefineError",f"Name {i} is not defined in {name}")
+        if vl == 'psudotype':
+            vl = self.types.type(self,'type',True)
         if not overrideConst and s[-1] in list(vl.vars.keys()):
             if vl.vars[s[-1]].const:
                 self.error("DefineError",f"Name {s[-1]} is constant")
@@ -350,6 +374,8 @@ class xmlang:
             s = name.split('.')
             for v in range(len(s)-1):
                 i = s[v]
+                if vl == 'psudotype':
+                    vl = self.types.type(self,'type',True)
                 if i in vl.vars:
                     if vl.typeName == 'class' and vl.makeType == 'instance':
                         return
@@ -358,6 +384,8 @@ class xmlang:
                         return
                 else:
                     return
+            if vl == 'psudotype':
+                vl = self.types.type(self,'type',True)
             if not overrideConst and s[-1] in vl.vars:
                 if vl.vars[s[-1]].const:
                     return
@@ -371,12 +399,16 @@ class xmlang:
         for i,v in self._locs.items():
             vl.vars[i] = v
         for i in name.split('.'):
+            if vl == 'psudotype':
+                vl = self.types.type(self,'type',True)
             if i in vl.vars:
                 if vl.typeName == 'class' and vl.makeType == 'instance':
                     self.error("ClassError",f"Can not get value of instance class {vl.name} in {name}")
                 vl = vl.vars[i]
             else:
                 self.error("DefineError",f"Name {i} is not defined in {name}")
+        if vl == 'psudotype':
+            vl = self.types.type(self,'type',True)
         return vl
     def varexists(self,name):
         class vl:
@@ -386,6 +418,8 @@ class xmlang:
         for i,v in self._locs.items():
             vl.vars[i] = v
         for i in name.split('.'):
+            if vl == 'psudotype':
+                vl = self.types.type(self,'type',True)
             if i in vl.vars:
                 vl = vl.vars[i]
             else:
@@ -437,8 +471,9 @@ class xmlang:
         <buildvar-math-mult><int to='v1'>{v1}</int><v1 mult='{v2}' /><return>{var: v1}</return></buildvar-math-mult>
         <buildvar-math-div><int to='v1'>{v1}</int><v1 div='{v2}' /><return>{var: v1}</return></buildvar-math-div>
         <buildvar-math-exp><int to='v1'>{v1}</int><v1 exp='{v2}' /><return>{var: v1}</return></buildvar-math-exp>
+        <buildvar-typeof><langcall command='typeof' to='ret'>{var: var}</langcall><return>{var: ret}</return></buildvar-typeof>
         </outer>"""
-        child = ET.fromstring(code)
+        child = self.ET.fromstring(code)
         children = [i for i in child]
         f = self.types.funct(self,[i for i in children[0]],['text'],{},False,True,True)
         self.varset("print",f)
@@ -453,6 +488,8 @@ class xmlang:
         cvars['div'] = self.types.funct(self,[i for i in children[6]],['v1','v2'],{},False,True)
         cvars['exp'] = self.types.funct(self,[i for i in children[7]],['v1','v2'],{},False,True)
         self.varset("math",self.types.classType(self,"math",True,cvars,'static'))
+        f = self.types.funct(self,[i for i in children[8]],['var'],{},False,True,True)
+        self.varset("typeof",f)
     def _tag_langcall(self,child):
         if not self._langcall:
             self.error("LangCallError","Current funct does not have langcall permissions")
@@ -469,6 +506,8 @@ class xmlang:
             v = self._cPath[::-1].replace(self._cPath.split(".")[-1][::-1]+'.',"",1)[::-1]
             v = v[::-1].replace(v.split(".")[-1][::-1]+'.',"",1)[::-1]
             self.varset(child.attrib['to'],self.types.string(self,v,False))
+        elif child.attrib['command'] == 'typeof':
+            self.varset(child.attrib['to'],self.types.type(self,self._textProcess(child.text).typeName,False))
     def addTag(self,tagname,data):
         self._tags[tagname] = data
     def _tag_public(self,child):

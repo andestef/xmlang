@@ -1,4 +1,17 @@
 <xmlang version='1.0.0'>
 <char to='q'>bca</char>
+<int to='q'>{var: q}</int>
+<print text='{q}' />
+<typeof to='v' var='{var: q}' />
+<print text='{v}' />
+<v.type to='q'/>
+<q.type to='q' />
+<q.type to='q'/>
+<q.type to='q' />
+<q.type to='q'/>
+<q.type to='q' />
+<q.type to='q'/>
+<q.type to='q' />
+<typeof var='{var:q}' to='q' />
 <print text='{q}' />
 </xmlang>
