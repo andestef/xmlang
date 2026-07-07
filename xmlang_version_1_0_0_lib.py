@@ -77,6 +77,11 @@ class xmlang:
                 return fvars
             def toString(self,caller):
                 return f"Function with required args: {self.reqargs} and optional args {self.optargs}"
+            def equivto(self,caller,comp):
+                if self.toString(caller)() == comp.toString(caller)():
+                    return True
+                else:
+                    return False
         class string:
             typeName = "string"
             vars = {}
@@ -97,6 +102,11 @@ class xmlang:
                 self.const = const
             def toString(self,caller):
                 return self.value
+            def equivto(self,caller,comp):
+                if self.toString(caller) == comp.toString(caller):
+                    return True
+                else:
+                    return False
         class null:
             vars = {}
             typeName = "null"
@@ -113,6 +123,11 @@ class xmlang:
                 caller.varset(child.attrib['to'],f)
             def toString(self,caller):
                 return "null"
+            def equivto(self,caller,comp):
+                if comp.type == 'null':
+                    return True
+                else:
+                    return False
         class classType:
             typeName = "class"
             vars = {}
@@ -168,6 +183,11 @@ class xmlang:
                 caller.varset(child.attrib['to'],var)
             def toString(self,caller):
                 return f"Class {self.name} with children: {','.join([i.name for i in self.children])}."
+            def equivto(self,caller,comp):
+                if self.toString(caller)() == comp.toString(caller):
+                    return True
+                else:
+                    return False
         class int:
             typeName = "int"
             vars = {}
@@ -278,6 +298,11 @@ class xmlang:
                 caller.varset(child.attrib['to'],f)
             def toString(self,caller):
                 return self.value
+            def equivto(self,caller,comp):
+                if self.toString(caller)() == comp.toString(caller):
+                    return True
+                else:
+                    return False
         class char:
             typeName = "char"
             vars = {}
@@ -297,6 +322,11 @@ class xmlang:
                 return self.value
             def toInt(self,caller):
                 return ord(self.value)
+            def equivto(self,caller,comp):
+                if self.toString(caller)() == comp.toString(caller):
+                    return True
+                else:
+                    return False
         class type(string):
             typeName = 'type'
         class bool:
@@ -308,7 +338,7 @@ class xmlang:
                 f = caller.types.bool(caller,child.text,'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
             def __init__(self,caller,value,const=False):
-                self.vars['type'] = caller.types.type(caller,'bool',True)
+                self.vars['type'] = caller.types.type(caller,self.typeName,True)
                 if value == '0':
                     self.value = False
                 else:
@@ -318,6 +348,13 @@ class xmlang:
                 return '1' if self.value else '0'
             def toInt(self,caller):
                 return 1 if self.value else 0
+            def equivto(self,caller,comp):
+                if self.toString(caller)() == comp.toString(caller):
+                    return True
+                else:
+                    return False
+        class ifblock(bool):
+            typeName = 'ifblock'
         class cond:
             typeName = "cond"
             vars = {}
@@ -328,6 +365,12 @@ class xmlang:
                         if i.tag == 'val':
                             thisbool = caller._textProcess(i.text,caller.types.bool)
                             if thisbool.value:
+                                ret = True
+                            else:
+                                ret = False
+                        elif i.tag == 'equiv':
+                            b = caller.is_equiv(caller._textProcess(i.attrib['v1']),caller._textProcess(i.attrib['v2']))
+                            if b:
                                 ret = True
                             else:
                                 ret = False
@@ -350,7 +393,12 @@ class xmlang:
                 return '1' if self.evaluate(caller) else '0'
             def toInt(self,caller):
                 return 1 if self.evaluate(caller) else 0
-        types = {"funct":funct,"string":string,"null":null,"class":classType,'int':int,'char':char,'type':type,'bool':bool,'cond':cond}
+            def equivto(self,caller,comp):
+                if self.toString(caller) == comp.toString(caller):
+                    return True
+                else:
+                    return False
+        types = {"funct":funct,"string":string,"null":null,"class":classType,'int':int,'char':char,'type':type,'bool':bool,'cond':cond,'ifblock':ifblock}
     def __init__(self,ET,langcall=False): # ET is the libary to load XML
         self.ET = ET
         self._globs = {}
@@ -392,6 +440,11 @@ class xmlang:
             return v
         else:
             self._locs = sv
+    def is_equiv(self,v1,v2):
+        if v1.typeName == v2.typeName:
+            return v1.equivto(self,v2)
+        else:
+            return v1.equivto(self,v2) #These do the same thing right now (just compare with tostring), but I want to add more in the future
     def varset(self,name,data,glob=False,overrideConst=False):
         if self._class[0].typeName != "null":
             self._class[0].vars[name] = data
@@ -576,8 +629,43 @@ class xmlang:
         run = self._textProcess(child.attrib['cond'],self.types.cond).evaluate(self)
         if run:
             self.run(child)
+        if 'block' in list(child.attrib.keys()):
+            self.varset(child.attrib['block'],self.types.ifblock(self,'1' if run else '0'),False)
     def _tag_ifn(self,child):
         run = self._textProcess(child.attrib['cond'],self.types.cond).evaluate(self)
         if not run:
             self.run(child)
-    _tags = {'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True},'public':{"f":_tag_public,"reqattrib":[],"optattrib":[],'takesChildren':True},'return':{'f':_tag_return,'reqattrib':[],'optattrib':[],'takesChildren':True},'if':{'f':_tag_if,'reqattrib':['cond'],'optattrib':[],'takesChildren':True},'ifn':{'f':_tag_ifn,'reqattrib':['cond'],'optattrib':[],'takesChildren':True}} #Optattrib=None is equiv to **kwargs
+        if 'block' in list(child.attrib.keys()):
+            self.varset(child.attrib['block'],self.types.ifblock(self,'0' if run else '1'),False)
+    def _tag_elseif(self,child):
+        if not self.varexists(child.attrib['block']):
+            self.error("IfError",f"Block variable {child.attrib['block']} does not exist")
+        block = self.varget(child.attrib['block'])
+        if block.typeName != 'ifblock' and block.typeName != 'bool':
+            self.error("IfError","Invalid type for block")
+        if not block.value:
+            run = self._textProcess(child.attrib['cond'],self.types.cond).evaluate(self)
+            if run:
+                self.run(child)
+            self.varset(child.attrib['block'],self.types.ifblock(self,'1' if run else '0'),False)
+    def _tag_elseifn(self,child):
+        if not self.varexists(child.attrib['block']):
+            self.error("IfError",f"Block variable {child.attrib['block']} does not exist")
+        block = self.varget(child.attrib['block'])
+        if block.typeName != 'ifblock' and block.typeName != 'bool':
+            self.error("IfError","Invalid type for block")
+        if not block.value:
+            run = self._textProcess(child.attrib['cond'],self.types.cond).evaluate(self)
+            if not run:
+                self.run(child)
+            self.varset(child.attrib['block'],self.types.ifblock(self,'0' if run else '1'),False)
+    def _tag_else(self,child):
+        if not self.varexists(child.attrib['block']):
+            self.error("IfError",f"Block variable {child.attrib['block']} does not exist")
+        block = self.varget(child.attrib['block'])
+        if block.typeName != 'ifblock' and block.typeName != 'bool':
+            self.error("IfError","Invalid type for block")
+        if not block.value:
+            self.run(child)
+            self.varset(child.attrib['block'],self.types.ifblock(self,'1'),False)
+    _tags = {'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True},'public':{"f":_tag_public,"reqattrib":[],"optattrib":[],'takesChildren':True},'return':{'f':_tag_return,'reqattrib':[],'optattrib':[],'takesChildren':True},'if':{'f':_tag_if,'reqattrib':['cond'],'optattrib':['block'],'takesChildren':True},'ifn':{'f':_tag_ifn,'reqattrib':['cond'],'optattrib':['block'],'takesChildren':True},'elseif':{'f':_tag_elseif,'reqattrib':['cond','block'],'optattrib':[],'takesChildren':True},'elseifn':{'f':_tag_elseifn,'reqattrib':['cond','block'],'optattrib':[],'takesChildren':True},'else':{'f':_tag_else,'reqattrib':['block'],'optattrib':[],'takesChildren':True}} #Optattrib=None is equiv to **kwargs

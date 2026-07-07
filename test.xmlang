@@ -1,10 +1,15 @@
 <xmlang version='1.0.0'>
-<bool to='v'>0</bool>
+<string to='v'>asdf</string>
 <cond to='c1'>
-<val>{v}</val>
+<equiv v1='{var: v}' v2='asdf' />
 </cond>
-<bool to='v'>1</bool>
-<ifn cond='{var: c1}'>
+<ifn cond='{var: c1}' block='bl1'>
 <print text='TRUE' />
 </ifn>
+<elseifn cond='{var: c1}' block='bl1'>
+<print text='EL' />
+</elseifn>
+<else block='bl1'>
+<print text='AAA' />
+</else>
 </xmlang>

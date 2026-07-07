@@ -1,6 +1,6 @@
 from importlib import import_module
 commandline_mode = False #Use static filename or get filename from argv
-use_lxml = False #Use libary lxml (install with pip install lxml)
+use_lxml = True #Use libary lxml (install with pip install lxml)
 if not commandline_mode:
     filename = 'test.xmlang'
 else:
