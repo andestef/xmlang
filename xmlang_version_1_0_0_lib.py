@@ -376,8 +376,8 @@ class xmlang:
                     for x in i:
                         ret.append(not self.__eval_children(caller,x,short,ormode))
                 elif i.tag == 'or':
+                    v = []
                     for x in i:
-                        v = []
                         v.append(self.__eval_children(caller,x,short,True))
                         if short:
                             for q in v:
@@ -385,11 +385,28 @@ class xmlang:
                                     return True
                     app = False
                     for q in v:
+                        if q:
+                            ret.append(True)
+                            app = True
+                    if not app:
+                        ret.append(False)
+                elif i.tag == 'and':
+                    v = []
+                    for x in i:
+                        v.append(self.__eval_children(caller,x,short,False))
+                        if short:
+                            for q in v:
+                                if not q:
+                                    return False
+                    app = False
+                    for q in v:
                         if not q:
                             ret.append(False)
                             app = True
                     if not app:
                         ret.append(True)
+                else:
+                    caller.run([i])
                 for q in ret:
                     if not q:
                         return False
