@@ -1,7 +1,7 @@
 <xmlang version='1.0.0'>
-<string to='v'>asdf</string>
-<cond to='c1'>
-<equiv v1='{var: v}' v2='asdf' />
+<string to='v'>asd</string>
+<cond to='c1' long=''>
+<or><equiv v1='{var: v}' v2='asdf' /><equiv v1='a' v2='a' /></or>
 </cond>
 <ifn cond='{var: c1}' block='bl1'>
 <print text='TRUE' />

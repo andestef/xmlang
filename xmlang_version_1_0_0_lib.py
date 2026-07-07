@@ -358,33 +358,66 @@ class xmlang:
         class cond:
             typeName = "cond"
             vars = {}
+            def __eval_children(self,caller,i,short,ormode=False):
+                ret = []
+                if i.tag == 'val':
+                    thisbool = caller._textProcess(i.text,caller.types.bool)
+                    if thisbool.value:
+                        ret.append(True)
+                    else:
+                        ret.append(False)
+                elif i.tag == 'equiv':
+                    b = caller.is_equiv(caller._textProcess(i.attrib['v1']),caller._textProcess(i.attrib['v2']))
+                    if b:
+                        ret.append(True)
+                    else:
+                        ret.append(False)
+                elif i.tag == 'not':
+                    for x in i:
+                        ret.append(not self.__eval_children(caller,x,short,ormode))
+                elif i.tag == 'or':
+                    for x in i:
+                        v = []
+                        v.append(self.__eval_children(caller,x,short,True))
+                        if short:
+                            for q in v:
+                                if q:
+                                    return True
+                    app = False
+                    for q in v:
+                        if not q:
+                            ret.append(False)
+                            app = True
+                    if not app:
+                        ret.append(True)
+                for q in ret:
+                    if not q:
+                        return False
+                return True
             def evaluate(self,caller):
                 if not self.__static:
-                    ret = False
+                    ret = []
                     for i in self.__children:
-                        if i.tag == 'val':
-                            thisbool = caller._textProcess(i.text,caller.types.bool)
-                            if thisbool.value:
-                                ret = True
-                            else:
-                                ret = False
-                        elif i.tag == 'equiv':
-                            b = caller.is_equiv(caller._textProcess(i.attrib['v1']),caller._textProcess(i.attrib['v2']))
-                            if b:
-                                ret = True
-                            else:
-                                ret = False
-                    return ret
+                        ret.append(self.__eval_children(caller,i,self.__short))
+                        if self.__short:
+                            for q in ret:
+                                if not q:
+                                    return False
+                    for q in ret:
+                        if not q:
+                            return False
+                    return True
                 else:
                     return self.__children
             def onCall(self,caller, child):
                 print('1' if self.evaluate(caller) else '0')
             def make(caller, child):
-                f = caller.types.cond(caller,child,'const' in list(child.attrib.keys()),'static' in list(child.attrib.keys()))
+                f = caller.types.cond(caller,child,'const' in list(child.attrib.keys()),'static' in list(child.attrib.keys()),not 'long' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
-            def __init__(self,caller,children,const=False,static=False):
+            def __init__(self,caller,children,const=False,static=False,short=True):
                 self.__static = False
                 self.const = const
+                self.__short = short
                 self.__children = children
                 if static:
                     self.__children = self.evaluate(caller)
