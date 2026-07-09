@@ -32,6 +32,7 @@ class xmlang:
                 f = caller.types.funct(caller,cl,reqArgs,optArgs,'takesChildren' in list(child.attrib.keys()),False,'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
             def onCall(self, caller, child, adv={}):
+                child = deepcopy(child)
                 oag = caller._autoglob
                 caller._autoglob = False
                 odb = caller._langcall
@@ -91,7 +92,11 @@ class xmlang:
                 else:
                     print(self.value)
             def make(caller, child):
-                f = caller.types.string(caller,caller._textProcess(child.text).toString(caller),'const' in list(child.attrib.keys()))
+                if child.text == None:
+                    t = ""
+                else:
+                    t = child.text
+                f = caller.types.string(caller,caller._textProcess(t).toString(caller),'const' in list(child.attrib.keys()))
                 caller.varset(child.attrib['to'],f)
             def __init__(self,caller,value,const=False,endloop=0):
                 if endloop < 2:
@@ -158,7 +163,6 @@ class xmlang:
                     caller._autoGlob(ags)
                     caller.varset(n,var)
             def __init__(self,caller,name,const,cvars,makeType):
-                self.vars['type'] = caller.types.type(caller,'class',True)
                 self.const = const
                 self.name = name
                 self.vars = cvars
@@ -617,7 +621,7 @@ class xmlang:
             return cast(self,text)
     def _buildBuiltins(self):
         code = """<outer>
-        <builtinvar-print><langcall command='print' text='{var: text}'> </langcall></builtinvar-print>
+        <builtinvar-println><langcall command='println' text='{var: text}'> </langcall></builtinvar-println>
         <buildvar-builtin-current><langcall command='whereAmI-1' to='ret'> </langcall><return>{var: ret}</return></buildvar-builtin-current>
         <buildvar-builtin-textprocess><return>{var: data}</return></buildvar-builtin-textprocess>
         <buildvar-math-add><int to='v1'>{v1}</int><v1 add='{v2}' /><return>{var: v1}</return></buildvar-math-add>
@@ -626,11 +630,13 @@ class xmlang:
         <buildvar-math-div><int to='v1'>{v1}</int><v1 div='{v2}' /><return>{var: v1}</return></buildvar-math-div>
         <buildvar-math-exp><int to='v1'>{v1}</int><v1 exp='{v2}' /><return>{var: v1}</return></buildvar-math-exp>
         <buildvar-typeof><langcall command='typeof' to='ret'>{var: var}</langcall><return>{var: ret}</return></buildvar-typeof>
+        <buildvar-userin><langcall command='userin' to='ret'> </langcall><return>{var:ret}</return></buildvar-userin>
+        <builtinvar-print><langcall command='print' text='{var: text}'> </langcall></builtinvar-print>
         </outer>"""
         child = self.ET.fromstring(code)
         children = [i for i in child]
         f = self.types.funct(self,[i for i in children[0]],['text'],{},False,True,True)
-        self.varset("print",f)
+        self.varset("println",f)
         cvars = {}
         cvars['current'] = self.types.funct(self,[i for i in children[1]],[],{},False,True)
         cvars['textprocess'] = self.types.funct(self,[i for i in children[2]],['data'],{},False,True)
@@ -644,11 +650,17 @@ class xmlang:
         self.varset("math",self.types.classType(self,"math",True,cvars,'static'))
         f = self.types.funct(self,[i for i in children[8]],['var'],{},False,True,True)
         self.varset("typeof",f)
+        f = self.types.funct(self,[i for i in children[9]],[],{},False,True,True)
+        self.varset("userin",f)
+        f = self.types.funct(self,[i for i in children[10]],['text'],{},False,True,True)
+        self.varset("print",f)
     def _tag_langcall(self,child):
         if not self._langcall:
             self.error("LangCallError","Current funct does not have langcall permissions")
-        elif child.attrib['command'] == 'print':
+        elif child.attrib['command'] == 'println':
             print(self._textProcess(child.attrib['text']).toString(self))
+        elif child.attrib['command'] == 'print':
+            print(self._textProcess(child.attrib['text']).toString(self),end='')
         elif child.attrib['command'] == 'rawvarprint':
             print(vars(self.varget(child.attrib['name'])))
         elif child.attrib['command'] == 'printvars':
@@ -662,6 +674,8 @@ class xmlang:
             self.varset(child.attrib['to'],self.types.string(self,v,False))
         elif child.attrib['command'] == 'typeof':
             self.varset(child.attrib['to'],self.types.type(self,self._textProcess(child.text).typeName,False))
+        elif child.attrib['command'] == 'userin':
+            self.varset(child.attrib['to'],self.types.string(self,input(),False))
     def addTag(self,tagname,data):
         self._tags[tagname] = data
     def _tag_public(self,child):
@@ -718,4 +732,14 @@ class xmlang:
         if not block.value:
             self.run(child)
             self.varset(child.attrib['block'],self.types.ifblock(self,'1'),False)
-    _tags = {'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True},'public':{"f":_tag_public,"reqattrib":[],"optattrib":[],'takesChildren':True},'return':{'f':_tag_return,'reqattrib':[],'optattrib':[],'takesChildren':True},'if':{'f':_tag_if,'reqattrib':['cond'],'optattrib':['block'],'takesChildren':True},'ifn':{'f':_tag_ifn,'reqattrib':['cond'],'optattrib':['block'],'takesChildren':True},'elseif':{'f':_tag_elseif,'reqattrib':['cond','block'],'optattrib':[],'takesChildren':True},'elseifn':{'f':_tag_elseifn,'reqattrib':['cond','block'],'optattrib':[],'takesChildren':True},'else':{'f':_tag_else,'reqattrib':['block'],'optattrib':[],'takesChildren':True}} #Optattrib=None is equiv to **kwargs
+    def _tag_while(self,child):
+        run = self._textProcess(child.attrib['cond'],self.types.cond).evaluate(self)
+        while run:
+            self.run(child)
+            run = self._textProcess(child.attrib['cond'],self.types.cond).evaluate(self)
+    def _tag_whilen(self,child):
+        run = self._textProcess(child.attrib['cond'],self.types.cond).evaluate(self)
+        while not run:
+            self.run(child)
+            run = self._textProcess(child.attrib['cond'],self.types.cond).evaluate(self)
+    _tags = {'langcall':{'f':_tag_langcall,'reqattrib':["command"],'optattrib':None,'takesChildren':True},'public':{"f":_tag_public,"reqattrib":[],"optattrib":[],'takesChildren':True},'return':{'f':_tag_return,'reqattrib':[],'optattrib':[],'takesChildren':True},'if':{'f':_tag_if,'reqattrib':['cond'],'optattrib':['block'],'takesChildren':True},'ifn':{'f':_tag_ifn,'reqattrib':['cond'],'optattrib':['block'],'takesChildren':True},'elseif':{'f':_tag_elseif,'reqattrib':['cond','block'],'optattrib':[],'takesChildren':True},'elseifn':{'f':_tag_elseifn,'reqattrib':['cond','block'],'optattrib':[],'takesChildren':True},'else':{'f':_tag_else,'reqattrib':['block'],'optattrib':[],'takesChildren':True},'while':{'f':_tag_while,'reqattrib':['cond'],'optattrib':[],'takesChildren':True},'whilen':{'f':_tag_whilen,'reqattrib':['cond'],'optattrib':[],'takesChildren':True}} #Optattrib=None is equiv to **kwargs
