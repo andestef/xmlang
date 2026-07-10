@@ -3,7 +3,22 @@ import re
 from copy import deepcopy
 class xmlang:
     class types:
-        class funct:
+        class __type:
+            typeName = "null"
+            vars = {}
+            isClass = False
+            def onCall(self,caller, child):
+                print(self.value)
+            def toString(self,caller):
+                return self.value
+            def toInt(self,caller):
+                return int(self.value)
+            def equivto(self,caller,comp):
+                if self.toString(caller)() == comp.toString(caller):
+                    return True
+                else:
+                    return False
+        class funct(__type):
             typeName = "funct"
             vars = {}
             def __init__(self,caller,children, reqargs=[], optargs={}, takesChildren=False,allowlangcall=False,const=False):
@@ -83,7 +98,7 @@ class xmlang:
                     return True
                 else:
                     return False
-        class string:
+        class string(__type):
             typeName = "string"
             vars = {}
             def onCall(self,caller, child):
@@ -112,7 +127,7 @@ class xmlang:
                     return True
                 else:
                     return False
-        class null:
+        class null(__type):
             vars = {}
             typeName = "null"
             def onCall(self,caller, child):
@@ -133,9 +148,10 @@ class xmlang:
                     return True
                 else:
                     return False
-        class classType:
+        class classType(__type):
             typeName = "class"
             vars = {}
+            isClass = True
             def onCall(self,caller, child):
                 if self.makeType == 'static':
                     n = deepcopy(child.attrib['to'])
@@ -157,19 +173,21 @@ class xmlang:
                     ags = caller._autoGlob(False)
                     op = caller._cPath
                     caller._cPath += '.'+child.tag
-                    v = self.vars[self.name].onCall(caller,child,{'this':caller.types.classType(caller,n,self.const,deepcopy(self.vars),'static')})
+                    v = self.vars[self.name].onCall(caller,child,{'this':caller.types.classType(caller,n,self.const,deepcopy(self.vars),'static',n)})
                     caller._cPath = op
                     var = v['this']
                     caller._autoGlob(ags)
                     caller.varset(n,var)
-            def __init__(self,caller,name,const,cvars,makeType):
+            def __init__(self,caller,name,const,cvars,makeType,typeN='class'):
                 self.const = const
                 self.name = name
                 self.vars = cvars
                 self.makeType = makeType
+                self.vars['type'] = caller.types.string(caller,typeN,True)
+                self.typeName = typeN
             def make(caller, child):
                 t = 'static' if 'static' in child.attrib else 'instance'
-                caller._setClass(child.attrib['to'],'const' in list(child.attrib.keys()),t)
+                caller._setClass(child.attrib['to'],'const' in list(child.attrib.keys()),t,typeN=child.attrib['to'] if t == 'static' else 'class')
                 ags = caller._autoGlob(False)
                 locs = caller._locsState()
                 cl = []
@@ -192,7 +210,7 @@ class xmlang:
                     return True
                 else:
                     return False
-        class int:
+        class int(__type):
             typeName = "int"
             vars = {}
             def onCall(self,caller, child):
@@ -307,7 +325,7 @@ class xmlang:
                     return True
                 else:
                     return False
-        class char:
+        class char(__type):
             typeName = "char"
             vars = {}
             def onCall(self,caller, child):
@@ -333,7 +351,7 @@ class xmlang:
                     return False
         class type(string):
             typeName = 'type'
-        class bool:
+        class bool(__type):
             typeName = "bool"
             vars = {}
             def onCall(self,caller, child):
@@ -359,7 +377,7 @@ class xmlang:
                     return False
         class ifblock(bool):
             typeName = 'ifblock'
-        class cond:
+        class cond(__type):
             typeName = "cond"
             vars = {}
             def __eval_children(self,caller,i,short,ormode=False):
@@ -474,12 +492,12 @@ class xmlang:
         a = self._autoglob
         self._autoglob = state
         return a
-    def _setClass(self,name,const,maketype,vars={}):
+    def _setClass(self,name,const,maketype,vars={},typeN='class'):
         if self._className == '':
             self._className = name
         else:
             self._className += '.'+name
-        self._class.insert(0,self.types.classType(self,self._className,const,vars,maketype))
+        self._class.insert(0,self.types.classType(self,self._className,const,vars,maketype,typeN))
     def _endClass(self):
         v = deepcopy(self._class[0])
         del self._class[0]
@@ -506,13 +524,14 @@ class xmlang:
             const = False
             typeName = 'null'
             vars = self._locs
+            isClass = False
         s = name.split('.')
         for v in range(len(s)-1):
             i = s[v]
             if vl == 'psudotype':
                 vl = self.types.type(self,'type',True)
             if i in vl.vars:
-                if vl.typeName == 'class' and vl.makeType == 'instance':
+                if vl.isClass and vl.makeType == 'instance':
                     self.error("ClassError",f"Can not set value of instance class {vl.name} in {name}")
                 vl = vl.vars[i]
                 if vl.const:
@@ -535,7 +554,7 @@ class xmlang:
                 if vl == 'psudotype':
                     vl = self.types.type(self,'type',True)
                 if i in vl.vars:
-                    if vl.typeName == 'class' and vl.makeType == 'instance':
+                    if vl.isClass and vl.makeType == 'instance':
                         return
                     vl = vl.vars[i]
                     if vl.const:
@@ -552,6 +571,7 @@ class xmlang:
         class vl:
             typeName = 'null'
             vars = {}
+            isClass = False
         for i,v in self._globs.items():
             vl.vars[i] = v
         for i,v in self._locs.items():
@@ -560,7 +580,7 @@ class xmlang:
             if vl == 'psudotype':
                 vl = self.types.type(self,'type',True)
             if i in vl.vars:
-                if vl.typeName == 'class' and vl.makeType == 'instance':
+                if vl.isClass  and vl.makeType == 'instance':
                     self.error("ClassError",f"Can not get value of instance class {vl.name} in {name}")
                 vl = vl.vars[i]
             else:

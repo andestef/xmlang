@@ -1,12 +1,12 @@
 <xmlang version='1.0.0'>
-<string to='val'> </string>
-<cond to='c1'>
-<equiv v1='{var: val}' v2='quit' />
-</cond>
-<whilen cond='{var: c1}'>
-<println text='Welcome to the Menu!' />
-<print text='Say Quit to end: ' />
-<userin to='val' />
-<println text='"{val}"' />
-</whilen>
+<class to='c' static=''>
+<public>
+<funct to='asd'>
+<print text='HELLO' />
+</funct>
+</public>
+</class>
+<c.type />
+<typeof to='v' var="{var: c}" />
+<v />
 </xmlang>
